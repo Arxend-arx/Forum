@@ -1,0 +1,61 @@
+{% extends "base.html" %}
+{% block title %}好友请求 - AcademicForumLite{% endblock %}
+
+{% block content %}
+    <div class="card">
+        <h2 style="margin-bottom:4px;">好友请求</h2>
+        <div class="meta">收到请求 · 已发出的请求</div>
+        <p style="margin-top:10px;"><a href="{{ url_for('chat') }}" class="btn btn-cancel btn-sm">&larr; 返回聊天</a></p>
+    </div>
+
+    {# 我收到的请求 #}
+    <div class="card">
+        <h3>收到的请求 ({{ received|length }})</h3>
+        {% if received %}
+            {% for r in received %}
+                <div class="msg-item" style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;">
+                    <a href="{{ url_for('profile', user_id=r.from_id) }}">
+                        <span class="avatar-circle" style="width:40px;height:40px;font-size:1rem;">{{ r.username[:1].upper() }}</span>
+                    </a>
+                    <div style="flex:1;min-width:120px;">
+                        <a href="{{ url_for('profile', user_id=r.from_id) }}" class="user-link"><strong>{{ r.username }}</strong></a>
+                        <div style="font-size:.75rem;color:#6a6a80;">请求于 {{ r.create_time }}</div>
+                    </div>
+                    <div style="display:flex;gap:8px;">
+                        <form method="POST" action="{{ url_for('accept_friend') }}">
+                            <input type="hidden" name="request_id" value="{{ r.id }}">
+                            <button type="submit" class="btn btn-primary btn-sm">接受</button>
+                        </form>
+                        <form method="POST" action="{{ url_for('reject_friend') }}">
+                            <input type="hidden" name="request_id" value="{{ r.id }}">
+                            <button type="submit" class="btn btn-danger btn-sm">拒绝</button>
+                        </form>
+                    </div>
+                </div>
+            {% endfor %}
+        {% else %}
+            <p class="empty" style="padding:20px 0;">暂无收到的好友请求</p>
+        {% endif %}
+    </div>
+
+    {# 我发出的请求 #}
+    <div class="card">
+        <h3>发出的请求 ({{ sent|length }})</h3>
+        {% if sent %}
+            {% for s in sent %}
+                <div class="msg-item" style="display:flex;align-items:center;gap:12px;">
+                    <a href="{{ url_for('profile', user_id=s.to_id) }}">
+                        <span class="avatar-circle" style="width:40px;height:40px;font-size:1rem;">{{ s.username[:1].upper() }}</span>
+                    </a>
+                    <div style="flex:1;">
+                        <a href="{{ url_for('profile', user_id=s.to_id) }}" class="user-link"><strong>{{ s.username }}</strong></a>
+                        <div style="font-size:.75rem;color:#6a6a80;">等待对方确认 · {{ s.create_time }}</div>
+                    </div>
+                    <span style="font-size:.8rem;color:#ffd93d;">等待中</span>
+                </div>
+            {% endfor %}
+        {% else %}
+            <p class="empty" style="padding:20px 0;">暂无发出的好友请求</p>
+        {% endif %}
+    </div>
+{% endblock %}

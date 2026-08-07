@@ -1,0 +1,59 @@
+{% extends "base.html" %}
+{% block title %}搜索{% if q %}"{{ q }}"{% endif %} - AcademicForumLite{% endblock %}
+
+{% block content %}
+    <div class="card">
+        <h2 style="margin-bottom:4px;">{% if q %}搜索 "{{ q }}"{% else %}搜索{% endif %}</h2>
+        <div class="meta">帖子 {{ posts|length }} 条 · 用户 {{ users|length }} 个</div>
+        <form action="{{ url_for('search') }}" method="get" style="margin-top:12px;">
+            <div style="display:flex;gap:8px;max-width:460px;">
+                <input type="text" name="q" value="{{ q }}" placeholder="输入关键字搜索帖子或用户..."
+                       class="form-group" style="flex:1;margin:0;">
+                <button type="submit" class="btn btn-primary btn-sm">搜索</button>
+            </div>
+        </form>
+    </div>
+
+    {% if q %}
+        {# 用户结果 #}
+        {% if users %}
+            <div class="card">
+                <h3>用户 ({{ users|length }})</h3>
+                <div class="user-list" style="margin-top:8px;">
+                    {% for u in users %}
+                        <a href="{{ url_for('profile', user_id=u.id) }}" class="user-tag">
+                            {{ u.username }}{% if u.bio %} · {{ u.bio[:30] }}{% endif %}
+                        </a>
+                    {% endfor %}
+                </div>
+            </div>
+        {% endif %}
+
+        {# 帖子结果 #}
+        {% if posts %}
+            <div class="card">
+                <h3>帖子 ({{ posts|length }})</h3>
+                {% for post in posts %}
+                    <div class="post-item">
+                        <h3><a href="{{ url_for('post_detail', post_id=post.id) }}">{{ post.title }}</a></h3>
+                        <div class="excerpt">{{ post.content | md | striptags | truncate(120, True) }}</div>
+                        <div class="meta">
+                            <a href="{{ url_for('profile', user_id=post.user_id) }}" class="user-link">{{ post.username }}</a>
+                            · {{ post.create_time }} · 评论 {{ post.comment_count }}
+                        </div>
+                    </div>
+                {% endfor %}
+            </div>
+        {% endif %}
+
+        {% if not posts and not users %}
+            <div class="card empty">
+                <p>没有找到与 "{{ q }}" 相关的内容，换个关键字试试？</p>
+            </div>
+        {% endif %}
+    {% else %}
+        <div class="card empty">
+            <p>输入关键字搜索帖子标题/内容或用户名</p>
+        </div>
+    {% endif %}
+{% endblock %}

@@ -1,0 +1,27 @@
+{% extends "base.html" %}
+{% block title %}匹配历史 - AcademicForumLite{% endblock %}
+
+{% block content %}
+    <div class="card">
+        <h2 style="margin-bottom:4px;">检索历史</h2>
+        <div class="meta">共 {{ records|length }} 条记录</div>
+        <p style="margin-top:10px;"><a href="{{ url_for('match') }}" class="btn btn-primary btn-sm">发起新匹配</a></p>
+    </div>
+
+    {% if records %}
+        <div class="card">
+            {% for r in records %}
+                <div class="post-item">
+                    <h3><a href="{{ url_for('match_result', search_id=r.id) }}">{{ r.keyword }}</a></h3>
+                    <div class="meta">
+                        {{ r.create_time }} · 命中 {{ r.result_count }} 条资源
+                    </div>
+                </div>
+            {% endfor %}
+        </div>
+    {% else %}
+        <div class="card empty">
+            <p>暂无检索记录，<a href="{{ url_for('match') }}">去匹配第一个学术资源</a></p>
+        </div>
+    {% endif %}
+{% endblock %}

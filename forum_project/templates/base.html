@@ -1,0 +1,347 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}AcademicForumLite{% endblock %}</title>
+    <style>
+        /* ===== 全局重置 - 暗色主题 ===== */
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+            background: #0f0f1a;
+            color: #d0d0d8;
+            line-height: 1.6;
+            min-height: 100vh;
+        }
+        a { color: #6c8cff; text-decoration: none; }
+        a:hover { text-decoration: underline; color: #8aa4ff; }
+
+        /* ===== 导航栏 ===== */
+        nav {
+            background: #1a1a2e;
+            color: #e0e0e8;
+            padding: 0 20px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            height: 56px;
+            box-shadow: 0 2px 8px rgba(0,0,0,.4);
+            border-bottom: 1px solid #2a2a40;
+        }
+        nav .brand { font-size: 1.3rem; font-weight: 700; color: #6c8cff; }
+        nav .brand:hover { text-decoration: none; }
+        nav .nav-links { display: flex; gap: 16px; align-items: center; }
+        nav .nav-links a { color: #b0b0c0; font-size: .9rem; transition: color .2s; }
+        nav .nav-links a:hover { color: #6c8cff; text-decoration: none; }
+        nav .nav-links span { font-size: .85rem; opacity: .75; color: #8888a0; }
+
+        /* ===== 主体容器 ===== */
+        .container {
+            max-width: 900px;
+            margin: 0 auto;
+            padding: 24px 16px;
+        }
+
+        /* ===== Flash 消息 ===== */
+        .flash {
+            padding: 12px 16px;
+            border-radius: 6px;
+            margin-bottom: 20px;
+            font-size: .9rem;
+        }
+        .flash.success { background: #1a2e1a; color: #7ddf7d; border: 1px solid #2a4a2a; }
+        .flash.danger   { background: #2e1a1a; color: #ff6b6b; border: 1px solid #4a2a2a; }
+        .flash.warning  { background: #2e2a1a; color: #ffd93d; border: 1px solid #4a442a; }
+        .flash.info     { background: #1a2a2e; color: #6bc5ff; border: 1px solid #2a444a; }
+
+        /* ===== 通用卡片 ===== */
+        .card {
+            background: #1a1a2e;
+            border-radius: 8px;
+            padding: 20px;
+            margin-bottom: 16px;
+            box-shadow: 0 2px 8px rgba(0,0,0,.3);
+            border: 1px solid #2a2a40;
+        }
+        .card h2 { margin-bottom: 8px; font-size: 1.2rem; color: #e8e8f0; }
+        .card .meta { font-size: .8rem; color: #7a7a90; margin-bottom: 10px; }
+
+        /* ===== 表单 ===== */
+        .form-group { margin-bottom: 16px; }
+        .form-group label { display: block; font-weight: 600; margin-bottom: 4px; font-size: .9rem; color: #b0b0c0; }
+        .form-group input,
+        .form-group textarea {
+            width: 100%;
+            padding: 10px 12px;
+            border: 1px solid #3a3a50;
+            border-radius: 6px;
+            font-size: .95rem;
+            outline: none;
+            transition: border-color .2s, box-shadow .2s;
+            background: #121222;
+            color: #d0d0d8;
+        }
+        .form-group input::placeholder,
+        .form-group textarea::placeholder { color: #5a5a70; }
+        .form-group input:focus,
+        .form-group textarea:focus {
+            border-color: #6c8cff;
+            box-shadow: 0 0 0 2px rgba(108,140,255,.15);
+        }
+        .form-group textarea { resize: vertical; min-height: 120px; }
+
+        .btn {
+            display: inline-block;
+            padding: 10px 20px;
+            border: none;
+            border-radius: 6px;
+            font-size: .9rem;
+            cursor: pointer;
+            transition: opacity .2s, background .2s;
+        }
+        .btn:hover { opacity: .9; }
+        .btn-primary {
+            background: #4a6cf7;
+            color: #fff;
+        }
+        .btn-primary:hover { background: #5b7aff; }
+        .btn-danger  {
+            background: #b02a37;
+            color: #fff;
+        }
+        .btn-danger:hover { background: #d03444; }
+        .btn-cancel {
+            background: #2a2a40;
+            color: #b0b0c0;
+            margin-left: 8px;
+        }
+        .btn-cancel:hover { background: #3a3a50; color: #d0d0d8; }
+        .btn-sm { padding: 6px 12px; font-size: .8rem; }
+
+        /* ===== 帖子列表 ===== */
+        .post-item { border-bottom: 1px solid #2a2a40; padding: 16px 0; }
+        .post-item:last-child { border-bottom: none; }
+        .post-item h3 { font-size: 1.1rem; margin-bottom: 4px; }
+        .post-item h3 a { color: #d0d0e8; }
+        .post-item h3 a:hover { color: #6c8cff; }
+        .post-item .excerpt { color: #8a8a9a; font-size: .9rem; }
+        .post-item .meta { font-size: .8rem; color: #6a6a80; }
+
+        /* ===== 评论 ===== */
+        .comment { padding: 12px 0; border-bottom: 1px solid #2a2a40; }
+        .comment:last-child { border-bottom: none; }
+        .comment .meta { font-size: .8rem; color: #6a6a80; margin-bottom: 4px; }
+
+        /* ===== 按钮组右对齐 ===== */
+        .text-right { text-align: right; }
+        .mt-2 { margin-top: 12px; }
+
+        /* ===== 空状态 ===== */
+        .empty { text-align: center; padding: 40px 0; color: #6a6a80; }
+
+        /* ===== 用户资料页 ===== */
+        .profile-header {
+            display: flex;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 16px;
+        }
+        .profile-header .profile-avatar { flex-shrink: 0; }
+        .avatar-circle {
+            display: inline-flex;
+            width: 64px; height: 64px;
+            border-radius: 50%;
+            background: linear-gradient(135deg, #4a6cf7, #6c8cff);
+            color: #fff;
+            font-size: 1.6rem;
+            font-weight: 700;
+            align-items: center;
+            justify-content: center;
+            user-select: none;
+        }
+        .profile-header .profile-info { flex: 1; min-width: 180px; }
+        .profile-header .profile-info h2 { margin: 0 0 2px; }
+        .profile-header .register-time { font-size: .8rem; color: #6a6a80; }
+        .profile-header .profile-bio {
+            margin-top: 8px;
+            font-size: .95rem;
+            color: #c0c0cc;
+        }
+        .profile-interest {
+            margin-top: 8px;
+            font-size: .9rem;
+        }
+        .profile-interest .label {
+            display: inline-block;
+            background: #2a2a40;
+            color: #6c8cff;
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-size: .8rem;
+            margin-right: 4px;
+        }
+        .profile-header .profile-actions { flex-shrink: 0; }
+
+        /* ===== 统计卡片 ===== */
+        .stats-row {
+            display: flex;
+            justify-content: space-around;
+            text-align: center;
+            padding: 16px;
+        }
+        .stat-item { display: flex; flex-direction: column; }
+        .stat-num  { font-size: 1.4rem; font-weight: 700; color: #e8e8f0; }
+        .stat-label { font-size: .8rem; color: #6a6a80; }
+
+        /* ===== 用户标签列表 ===== */
+        .user-list { display: flex; flex-wrap: wrap; gap: 8px; }
+        .user-tag {
+            display: inline-block;
+            padding: 4px 12px;
+            background: #2a2a40;
+            border-radius: 16px;
+            font-size: .85rem;
+            color: #b0b0c0;
+            transition: background .2s;
+        }
+        .user-tag:hover { background: #3a3a50; text-decoration: none; }
+
+        /* ===== 用户名链接（帖子/评论中） ===== */
+        .user-link { color: #8aa4ff; font-weight: 600; }
+        .user-link:hover { color: #aac0ff; }
+
+        /* ===== 页尾 ===== */
+        footer {
+            text-align: center;
+            padding: 24px;
+            color: #4a4a60;
+            font-size: .8rem;
+        }
+
+        /* ===== 导航搜索框 & 未读徽标 ===== */
+        .search-form { display: flex; gap: 4px; align-items: center; }
+        .search-form input {
+            background: #121222; border: 1px solid #3a3a50; color: #d0d0d8;
+            border-radius: 6px; padding: 6px 10px; font-size: .85rem;
+            width: 170px; outline: none;
+        }
+        .search-form input:focus { border-color: #6c8cff; }
+        .search-form button {
+            background: #4a6cf7; color: #fff; border: none; border-radius: 6px;
+            padding: 6px 12px; font-size: .85rem; cursor: pointer;
+        }
+        .search-form button:hover { background: #5b7aff; }
+        .badge {
+            display: inline-block; min-width: 16px; padding: 0 5px;
+            background: #e5534b; color: #fff; font-size: .7rem;
+            line-height: 16px; text-align: center; border-radius: 8px;
+            margin-left: 2px; vertical-align: top;
+        }
+
+        /* ===== 富文本编辑器 ===== */
+        .md-editor { border: 1px solid #3a3a50; border-radius: 8px; overflow: hidden; background: #121222; }
+        .md-toolbar {
+            display: flex; align-items: center; gap: 4px; padding: 6px 8px;
+            background: #1a1a2e; border-bottom: 1px solid #2a2a40; flex-wrap: wrap;
+        }
+        .tb-btn {
+            background: #2a2a40; color: #d0d0d8; border: none; border-radius: 4px;
+            min-width: 30px; height: 28px; font-size: .85rem; cursor: pointer;
+        }
+        .tb-btn:hover { background: #3a3a50; }
+        .tb-tip { font-size: .7rem; color: #5a5a70; margin-left: 8px; }
+        .md-editor textarea {
+            width: 100%; background: #121222; color: #d0d0d8; border: none;
+            padding: 12px; font-size: .95rem; resize: vertical; outline: none;
+        }
+        .emoji-panel {
+            display: flex; flex-wrap: wrap; gap: 2px; padding: 8px;
+            background: #1a1a2e; border-top: 1px solid #2a2a40;
+            max-height: 130px; overflow-y: auto;
+        }
+        .emoji-item { cursor: pointer; font-size: 1.2rem; padding: 2px; border-radius: 4px; }
+        .emoji-item:hover { background: #3a3a50; }
+        .editor-status { font-size: .75rem; color: #6a6a80; padding: 4px 8px; }
+        .editor-status.ok { color: #7ddf7d; }
+        .editor-status.err { color: #ff6b6b; }
+
+        /* ===== 消息/好友列表项 ===== */
+        .msg-item { border-bottom: 1px solid #2a2a40; padding: 12px 0; }
+        .msg-item:last-child { border-bottom: none; }
+        .msg-item .meta { font-size: .8rem; color: #6a6a80; margin-bottom: 4px; }
+        .msg-item.unread { background: rgba(108,140,255,.06); border-radius: 6px; }
+
+        /* ===== Markdown 内容渲染 ===== */
+        .md-content { line-height: 1.8; font-size: .95rem; color: #c8c8d4; }
+        .md-content h1, .md-content h2, .md-content h3,
+        .md-content h4, .md-content h5, .md-content h6 {
+            color: #e8e8f4; margin: 1.1em 0 .5em; line-height: 1.4;
+        }
+        .md-content h1 { font-size: 1.35rem; }
+        .md-content h2 { font-size: 1.2rem; }
+        .md-content h3 { font-size: 1.08rem; }
+        .md-content h4, .md-content h5, .md-content h6 { font-size: 1rem; }
+        .md-content p { margin: .5em 0; }
+        .md-content strong { color: #f0f0fa; }
+        .md-content code {
+            background: #1c1c30; color: #8fd3ff; padding: 2px 6px;
+            border-radius: 4px; font-size: .85em;
+        }
+        .md-content pre {
+            background: #121222; color: #c8c8d4; padding: 12px;
+            border-radius: 6px; overflow-x: auto; line-height: 1.6;
+        }
+        .md-content pre code { background: none; padding: 0; color: inherit; }
+        .md-content ul, .md-content ol { padding-left: 1.6em; margin: .5em 0; }
+        .md-content li { margin: .25em 0; }
+        .md-content blockquote {
+            border-left: 3px solid #6c8cff; margin: .6em 0;
+            padding: .2em .8em; color: #9a9ab0; background: #14142a;
+            border-radius: 0 4px 4px 0;
+        }
+        .md-content hr { border: none; border-top: 1px solid #2a2a44; margin: 1em 0; }
+        .md-content a { color: #6c8cff; }
+        .md-content img, .md-content video { max-width: 100%; border-radius: 8px; margin: 8px 0; }
+    </style>
+</head>
+<body>
+
+<nav>
+    <a href="{{ url_for('index') }}" class="brand">AcademicForumLite</a>
+    <form action="{{ url_for('search') }}" method="get" class="search-form">
+        <input type="text" name="q" placeholder="搜索帖子 / 用户..." value="{{ request.args.get('q','') }}">
+        <button type="submit">搜索</button>
+    </form>
+    <div class="nav-links">
+        {% if session.user_id %}
+            <span>{{ session.username }}</span>
+            <a href="{{ url_for('create_post') }}">发帖</a>
+            <a href="{{ url_for('match') }}">学术匹配</a>
+            <a href="{{ url_for('chat') }}">聊天</a>
+            <a href="{{ url_for('messages') }}">信件箱{% if unread_count %}<span class="badge">{{ unread_count }}</span>{% endif %}</a>
+            <a href="{{ url_for('profile', user_id=session.user_id) }}">我的</a>
+            <a href="{{ url_for('logout') }}">退出</a>
+        {% else %}
+            <a href="{{ url_for('login') }}">登录</a>
+            <a href="{{ url_for('register') }}">注册</a>
+        {% endif %}
+    </div>
+</nav>
+
+<div class="container">
+    {# flash 消息循环 #}
+    {% with messages = get_flashed_messages(with_categories=true) %}
+        {% if messages %}
+            {% for category, msg in messages %}
+                <div class="flash {{ category }}">{{ msg }}</div>
+            {% endfor %}
+        {% endif %}
+    {% endwith %}
+
+    {% block content %}{% endblock %}
+</div>
+
+<footer>&copy; {{ now().year }} AcademicForumLite · Flask + SQLite3</footer>
+</body>
+</html>

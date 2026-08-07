@@ -1,0 +1,65 @@
+{% extends "base.html" %}
+{% block title %}聊天 - AcademicForumLite{% endblock %}
+
+{% block content %}
+    <div class="card">
+        <h2 style="margin-bottom:4px;">聊天</h2>
+        <div class="meta">
+            好友列表与最近对话 · 仅好友之间可私信
+            <a href="{{ url_for('friend_requests') }}" style="margin-left:8px;">好友请求</a>
+        </div>
+    </div>
+
+    {# 最近对话 #}
+    <div class="card">
+        <h3>最近对话</h3>
+        {% if convos %}
+            {% for c in convos %}
+                <a href="{{ url_for('chat_detail', user_id=c.other_id) }}" style="text-decoration:none;">
+                    <div class="msg-item" style="display:flex;align-items:center;gap:12px;">
+                        <span class="avatar-circle" style="width:40px;height:40px;font-size:1rem;">{{ c.other_name[:1].upper() }}</span>
+                        <div style="flex:1;min-width:0;">
+                            <div style="display:flex;justify-content:space-between;align-items:center;">
+                                <strong style="color:#e8e8f4;">{{ c.other_name }}</strong>
+                                <span style="font-size:.75rem;color:#6a6a80;">{{ c.time }}</span>
+                            </div>
+                            <div class="excerpt" style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">
+                                {{ c.content | md | striptags | truncate(60) }}
+                            </div>
+                        </div>
+                        {% if c.unread %}
+                            <span class="badge">{{ c.unread }}</span>
+                        {% endif %}
+                    </div>
+                </a>
+            {% endfor %}
+        {% else %}
+            <p class="empty" style="padding:20px 0;">暂无对话，从下方好友列表发起聊天吧</p>
+        {% endif %}
+    </div>
+
+    {# 好友列表（头像 + 用户名） #}
+    <div class="card">
+        <h3>我的好友 ({{ friends|length }})</h3>
+        {% if friends %}
+            <div style="display:flex;flex-wrap:wrap;gap:12px;margin-top:8px;">
+                {% for f in friends %}
+                    <a href="{{ url_for('chat_detail', user_id=f.id) }}"
+                       style="text-decoration:none;display:flex;align-items:center;gap:10px;
+                              background:#1a1a2e;border:1px solid #2a2a40;border-radius:8px;
+                              padding:10px 14px;min-width:180px;">
+                        <span class="avatar-circle" style="width:40px;height:40px;font-size:1rem;">{{ f.username[:1].upper() }}</span>
+                        <div>
+                            <div style="color:#e8e8f4;font-weight:600;">{{ f.username }}</div>
+                            <div style="font-size:.75rem;color:#6a6a80;">发消息 →</div>
+                        </div>
+                    </a>
+                {% endfor %}
+            </div>
+        {% else %}
+            <p class="empty" style="padding:20px 0;">
+                暂无好友，去 <a href="{{ url_for('index') }}">论坛</a> 认识朋友，或在他人主页点「加好友」
+            </p>
+        {% endif %}
+    </div>
+{% endblock %}

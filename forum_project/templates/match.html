@@ -1,0 +1,71 @@
+{% extends "base.html" %}
+{% block title %}学术资源匹配 - AcademicForumLite{% endblock %}
+
+{% block content %}
+    <div class="card" style="max-width:700px; margin:0 auto;">
+        <h2 style="margin-bottom:4px;">学术资源匹配</h2>
+        <p style="font-size:.85rem;color:#6a6a80;margin-bottom:20px;">
+            基于智慧芽全球专利 + 科技文献数据库，匹配与你研究方向相关的学术资源
+        </p>
+
+        {# 智慧芽 MCP 配置状态提示 #}
+        {% if not mcp_ready %}
+            <div class="flash warning">系统尚未配置智慧芽MCP服务，请联系管理员在 config.json 中配置后使用</div>
+        {% endif %}
+
+        {# LLM API 设置入口（可配置/修改自己的大模型 API） #}
+        <div class="card" style="max-width:700px; margin:0 auto; margin-bottom:0;">
+            <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;">
+                <div>
+                    <strong style="color:#e8e8f4;font-size:.95rem;">大模型 API（LLM 智能分析）</strong>
+                    <div class="meta" style="margin:4px 0 0;">
+                        {% if llm_ready %}
+                            <span style="color:#7ddf7d;">● 已配置</span> · 模型：{{ llm_model }}
+                        {% else %}
+                            <span style="color:#ffd93d;">● 未配置</span> · 智能分析将被跳过
+                        {% endif %}
+                    </div>
+                </div>
+                <a href="{{ url_for('settings_llm') }}" class="btn btn-primary btn-sm">配置 / 修改</a>
+            </div>
+        </div>
+
+        <form method="POST" action="{{ url_for('match_search') }}">
+            <div class="form-group">
+                <label for="keyword">检索关键词 / 研究方向</label>
+                <input type="text" id="keyword" name="keyword"
+                       placeholder="例如：锂电池负极材料、深度学习医疗影像..."
+                       value="{{ default_interest }}" required>
+            </div>
+
+            <div class="form-group" style="display:flex;gap:24px;align-items:center;flex-wrap:wrap;">
+                <label style="margin:0;display:flex;align-items:center;gap:6px;font-weight:normal;">
+                    <input type="checkbox" name="use_interest" checked> 结合我的学习意向匹配
+                </label>
+                <label style="margin:0;display:flex;align-items:center;gap:6px;font-weight:normal;">
+                    <input type="checkbox" name="use_llm" checked> 使用 LLM 生成匹配分析
+                </label>
+            </div>
+
+            <button type="submit" class="btn btn-primary" {% if not mcp_ready %}disabled{% endif %}>
+                开始匹配
+            </button>
+            <a href="{{ url_for('match_history') }}" class="btn btn-cancel">检索历史</a>
+        </form>
+    </div>
+
+    <div class="card" style="max-width:700px; margin:0 auto;">
+        <h3 style="margin-bottom:10px;">使用说明</h3>
+        <ul style="font-size:.9rem;color:#b0b0c0;padding-left:20px;line-height:2;">
+            <li>输入研究方向关键词，系统将通过智慧芽检索全球专利与科技文献</li>
+            <li>勾选「结合我的学习意向」后，会追加你资料页中填写的学习意向进行匹配</li>
+            <li>勾选「使用 LLM」后，将调用你自配的大模型对结果做智能摘要与匹配度分析</li>
+            <li>未配置 LLM API 时，仍可正常检索并查看原始结果</li>
+            <li>
+                科技文献检索依赖智慧芽账号：需在
+                <a href="https://open.zhihuiya.com" target="_blank" rel="noopener">智慧芽开放平台</a>
+                注册账号并开通「查新检索Lite」文献服务，未开通时文献区可能无结果
+            </li>
+        </ul>
+    </div>
+{% endblock %}

@@ -1,0 +1,74 @@
+{% extends "base.html" %}
+{% from "_editor.html" import editor %}
+{% block title %}{{ post.title }} - AcademicForumLite{% endblock %}
+
+{% block content %}
+    {# 帖子正文 #}
+    <div class="card">
+        <h2>{{ post.title }}</h2>
+        <div class="meta">
+            <a href="{{ url_for('profile', user_id=post.user_id) }}" class="user-link">{{ post.username }}</a>
+            · 发布于 {{ post.create_time }}
+            {% if post.create_time != post.update_time %}
+                · 编辑于 {{ post.update_time }}
+            {% endif %}
+        </div>
+        <div class="md-content">{{ post.content | md | safe }}</div>
+
+        {# 删除按钮：仅发帖人可见 #}
+        {% if session.user_id == post.user_id %}
+            <form method="POST"
+                  action="{{ url_for('delete_post', post_id=post.id) }}"
+                  onsubmit="return confirm('确定要删除此帖子吗？所有评论也将一并删除。');"
+                  style="margin-top:16px;">
+                <button type="submit" class="btn btn-danger btn-sm">删除帖子</button>
+            </form>
+        {% endif %}
+    </div>
+
+    {# 评论区域 #}
+    <div class="card">
+        <h3>评论 ({{ comments|length }})</h3>
+
+        {# 评论列表 #}
+        {% if comments %}
+            {% for comment in comments %}
+                <div class="comment">
+                    <div class="meta">
+                        <a href="{{ url_for('profile', user_id=comment.user_id) }}" class="user-link"><strong>{{ comment.username }}</strong></a>
+                        · {{ comment.create_time }}
+                    </div>
+                    <div class="md-content">{{ comment.content | md | safe }}</div>
+                    {# 删除评论：仅评论者可见 #}
+                    {% if session.user_id == comment.user_id %}
+                        <form method="POST"
+                              action="{{ url_for('delete_comment', comment_id=comment.id) }}"
+                              onsubmit="return confirm('确定要删除此评论吗？');"
+                              style="margin-top:4px;">
+                            <button type="submit" class="btn btn-danger btn-sm">删除</button>
+                        </form>
+                    {% endif %}
+                </div>
+            {% endfor %}
+        {% else %}
+            <p class="empty" style="padding:20px 0;">暂无评论，来发表第一条评论吧</p>
+        {% endif %}
+
+        {# 添加评论表单（富文本 + @用户） #}
+        {% if session.user_id %}
+            <form method="POST" action="{{ url_for('add_comment', post_id=post.id) }}" style="margin-top:16px;">
+                <div class="form-group">
+                    <label for="content">发表评论（输入 <code>@用户名</code> 可提及对方）</label>
+                    {{ editor('content', '写下你的评论...', '90px') }}
+                </div>
+                <button type="submit" class="btn btn-primary btn-sm">提交评论</button>
+            </form>
+        {% else %}
+            <p class="mt-2" style="font-size:.85rem;color:#6a6a80;">
+                <a href="{{ url_for('login') }}">登录</a> 后即可发表评论
+            </p>
+        {% endif %}
+    </div>
+
+    <p class="mt-2"><a href="{{ url_for('index') }}">&larr; 返回首页</a></p>
+{% endblock %}

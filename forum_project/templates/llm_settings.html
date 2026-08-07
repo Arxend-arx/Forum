@@ -1,0 +1,67 @@
+{% extends "base.html" %}
+{% block title %}LLM API 设置 - AcademicForumLite{% endblock %}
+
+{% block content %}
+    <div class="card" style="max-width:600px; margin:0 auto;">
+        <h2 style="margin-bottom:4px;">大模型 API 设置</h2>
+        <p style="font-size:.85rem;color:#6a6a80;margin-bottom:16px;">
+            配置 OpenAI 兼容格式的 API，用于学术资源的智能匹配分析（支持 DeepSeek / 通义千问 / Kimi / GLM / OpenAI 等）
+        </p>
+
+        {# 当前配置状态 #}
+        {% if configured %}
+            <div class="flash success">当前已配置：<strong>{{ model }}</strong>（{{ base_url }}）</div>
+        {% else %}
+            <div class="flash warning">尚未配置大模型 API，智能分析功能将被跳过</div>
+        {% endif %}
+
+        <form method="POST" action="{{ url_for('settings_llm') }}">
+            <div class="form-group">
+                <label for="base_url">API Base URL</label>
+                <input type="text" id="base_url" name="base_url"
+                       placeholder="https://api.deepseek.com/v1" value="{{ base_url }}">
+            </div>
+            <div class="form-group">
+                <label for="api_key">API Key</label>
+                <input type="password" id="api_key" name="api_key"
+                       placeholder="sk-..." value="{{ api_key }}">
+                <small style="color:#6a6a80;font-size:.8rem;">仅保存在本服务器数据库中，不会上传给第三方</small>
+            </div>
+            <div class="form-group">
+                <label for="model">模型名称</label>
+                <input type="text" id="model" name="model"
+                       placeholder="deepseek-chat / qwen-plus / kimi-k2 / glm-4..." value="{{ model }}">
+            </div>
+            <div style="display:flex;gap:8px;align-items:center;">
+                <button type="submit" name="action" value="save" class="btn btn-primary">保存配置</button>
+                <button type="submit" name="action" value="test" class="btn btn-cancel">测试连接</button>
+            </div>
+        </form>
+
+        <div style="margin-top:20px;padding-top:16px;border-top:1px solid #2a2a40;">
+            <h3 style="font-size:.95rem;margin-bottom:8px;">常用服务商参考</h3>
+            <table style="font-size:.85rem;color:#b0b0c0;width:100%;border-collapse:collapse;">
+                <tr style="border-bottom:1px solid #2a2a40;">
+                    <td style="padding:6px 0;">DeepSeek</td>
+                    <td>https://api.deepseek.com/v1</td>
+                    <td>deepseek-chat</td>
+                </tr>
+                <tr style="border-bottom:1px solid #2a2a40;">
+                    <td style="padding:6px 0;">通义千问</td>
+                    <td>https://dashscope.aliyuncs.com/compatible-mode/v1</td>
+                    <td>qwen-plus</td>
+                </tr>
+                <tr style="border-bottom:1px solid #2a2a40;">
+                    <td style="padding:6px 0;">Kimi</td>
+                    <td>https://api.moonshot.cn/v1</td>
+                    <td>kimi-k2-0711-preview</td>
+                </tr>
+                <tr>
+                    <td style="padding:6px 0;">智谱GLM</td>
+                    <td>https://open.bigmodel.cn/api/paas/v4</td>
+                    <td>glm-4-flash</td>
+                </tr>
+            </table>
+        </div>
+    </div>
+{% endblock %}

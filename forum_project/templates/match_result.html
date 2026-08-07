@@ -1,0 +1,122 @@
+{% extends "base.html" %}
+{% block title %}匹配结果 - AcademicForumLite{% endblock %}
+
+{% block content %}
+    <div class="card">
+        <h2 style="margin-bottom:4px;">"{{ record.keyword }}" 的匹配结果</h2>
+        <div class="meta">检索时间 {{ record.create_time }} · 共 {{ record.result_count }} 条资源</div>
+        <p style="margin-top:10px;">
+            <a href="{{ url_for('match') }}" class="btn btn-primary btn-sm">再次匹配</a>
+            <a href="{{ url_for('match_history') }}" class="btn btn-cancel btn-sm">历史记录</a>
+        </p>
+    </div>
+
+    {# LLM 智能分析（Markdown 渲染） #}
+    {% if summary %}
+        <div class="card">
+            <h3>AI 匹配分析</h3>
+            <div class="md-content">
+                {{ summary | md | safe }}
+            </div>
+        </div>
+    {% elif llm_error %}
+        <div class="flash warning">{{ llm_error }}</div>
+    {% endif %}
+
+    {# 检索错误提示 #}
+    {% for err in errors %}
+        <div class="flash warning">{{ err }}</div>
+    {% endfor %}
+
+    {# 专利结果 #}
+    {% if patents %}
+        <div class="card">
+            <h3>专利 ({{ patents|length }})</h3>
+            {% for p in patents %}
+                <div class="post-item">
+                    <h3>
+                        {% if p.url %}
+                            <a href="{{ p.url }}" target="_blank" rel="noopener">{{ p.title }} ↗</a>
+                        {% else %}
+                            {{ p.title }}
+                        {% endif %}
+                    </h3>
+                    {% if p.patent_number %}
+                        <div class="meta">专利号：{{ p.patent_number }}</div>
+                    {% endif %}
+                    {% if p.snippet %}
+                        <div class="excerpt">{{ p.snippet[:200] }}{% if p.snippet|length > 200 %}...{% endif %}</div>
+                    {% endif %}
+                    <div class="meta">
+                        {% if p.assignee %}申请人：{{ p.assignee }} · {% endif %}
+                        {% if p.date %}公开日：{{ p.date }}{% endif %}
+                    </div>
+                </div>
+            {% endfor %}
+        </div>
+    {% endif %}
+
+    {# 文献结果 #}
+    {% if literature %}
+        <div class="card">
+            <h3>科技文献 ({{ literature|length }})</h3>
+            {% for l in literature %}
+                <div class="post-item">
+                    <h3>
+                        {% if l.url %}
+                            <a href="{{ l.url }}" target="_blank" rel="noopener">{{ l.title }} ↗</a>
+                        {% else %}
+                            {{ l.title }}
+                        {% endif %}
+                    </h3>
+                    {% if l.snippet %}
+                        <div class="excerpt">{{ l.snippet[:200] }}{% if l.snippet|length > 200 %}...{% endif %}</div>
+                    {% endif %}
+                    <div class="meta">
+                        {% if l.assignee %}作者：{{ l.assignee }} · {% endif %}
+                        {% if l.date %}日期：{{ l.date }}{% endif %}
+                    </div>
+                </div>
+            {% endfor %}
+        </div>
+    {% endif %}
+
+    {# 文献缺失提示：文献检索依赖智慧芽账号 #}
+    {% if not literature and patents %}
+        <div class="flash warning">
+            未匹配到科技文献。文献检索依赖智慧芽账号：请确认管理员已在
+            <a href="https://open.zhihuiya.com" target="_blank" rel="noopener">智慧芽开放平台</a>
+            注册账号并开通「查新检索Lite」文献服务，且 config.json 已配置文献服务器（patsnap_literature 节点），配置后需重启服务生效。
+        </div>
+    {% endif %}
+
+    {# 空结果 #}
+    {% if not patents and not literature %}
+        <div class="card empty">
+            <p>未检索到可解析的资源。可能是关键词无结果，或智慧芽返回了特殊格式。</p>
+            <p><a href="{{ url_for('match') }}">尝试更换关键词</a></p>
+        </div>
+    {% endif %}
+
+    {# 原始返回兜底展示（便于排查智慧芽返回格式） #}
+    {% if patents_raw or literature_raw or tools_found %}
+        <div class="card">
+            <h3>原始返回内容（用于排查）</h3>
+            {% if tools_found %}
+                <div class="meta">服务器可用工具：
+                    专利:{{ tools_found.patent|join('、') if tools_found.patent else '未发现' }} ·
+                    文献:{{ tools_found.literature|join('、') if tools_found.literature else '未发现' }} ·
+                    其他:{{ tools_found.other|join('、') if tools_found.other else '未发现' }}
+                </div>
+            {% endif %}
+            {% if patents_raw %}
+                <div class="meta">专利原始返回：</div>
+                <pre style="white-space:pre-wrap;font-size:.8rem;color:#8a8a9a;background:#121222;padding:12px;border-radius:6px;overflow-x:auto;">{{ patents_raw }}</pre>
+            {% endif %}
+            {% if literature_raw %}
+                <div class="meta" style="margin-top:12px;">文献原始返回：</div>
+                <pre style="white-space:pre-wrap;font-size:.8rem;color:#8a8a9a;background:#121222;padding:12px;border-radius:6px;overflow-x:auto;">{{ literature_raw }}</pre>
+            {% endif %}
+        </div>
+    {% endif %}
+{% endblock %}

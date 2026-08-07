@@ -1,0 +1,25 @@
+{% extends "base.html" %}
+{% block title %}编辑资料 - AcademicForumLite{% endblock %}
+
+{% block content %}
+    <div class="card" style="max-width:600px; margin:0 auto;">
+        <h2 style="margin-bottom:20px;">编辑个人资料</h2>
+        <form method="POST">
+            <div class="form-group">
+                <label for="avatar">头像链接</label>
+                <input type="text" id="avatar" name="avatar" placeholder="输入头像图片URL（可选）" value="{{ user.avatar }}">
+                <small style="color:#6a6a80;font-size:.8rem;">留空将使用默认头像</small>
+            </div>
+            <div class="form-group">
+                <label for="bio">个性签名</label>
+                <textarea id="bio" name="bio" placeholder="写一句你的个性签名..." style="min-height:60px;">{{ user.bio }}</textarea>
+            </div>
+            <div class="form-group">
+                <label for="learning_interest">学习意向</label>
+                <textarea id="learning_interest" name="learning_interest" placeholder="例如：正在学习 Python / 数据科学 / Web开发..." style="min-height:60px;">{{ user.learning_interest }}</textarea>
+            </div>
+            <button type="submit" class="btn btn-primary">保存修改</button>
+            <a href="{{ url_for('profile', user_id=session.user_id) }}" class="btn btn-cancel">取消</a>
+        </form>
+    </div>
+{% endblock %}

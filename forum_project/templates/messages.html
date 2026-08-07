@@ -1,0 +1,30 @@
+{% extends "base.html" %}
+{% block title %}信件箱 - AcademicForumLite{% endblock %}
+
+{% block content %}
+    <div class="card">
+        <h2 style="margin-bottom:4px;">信件箱</h2>
+        <div class="meta">系统通知（@提及、好友请求等） · 打开后自动标记为已读</div>
+
+        {% if systems %}
+            {% for m in systems %}
+                <div class="msg-item {{ 'unread' if m.is_read == 0 else '' }}">
+                    <div class="meta">
+                        <span style="color:#6bc5ff;">系统通知</span>
+                        {% if m.sender_name %}<a href="{{ url_for('profile', user_id=m.sender_id) }}" class="user-link">{{ m.sender_name }}</a>{% endif %}
+                        · {{ m.create_time }}
+                        {% if m.is_read == 0 %}· <span style="color:#ff6b6b;">未读</span>{% endif %}
+                    </div>
+                    <div class="md-content" style="font-size:.9rem;">{{ m.content | md | safe }}</div>
+                    {% if m.link %}
+                        <a href="{{ m.link }}" class="btn btn-cancel btn-sm" style="margin-top:6px;">查看 ↗</a>
+                    {% endif %}
+                </div>
+            {% endfor %}
+        {% else %}
+            <p class="empty" style="padding:24px 0;">
+                暂无系统通知（例如：别人在评论中 @ 了你、好友请求等）
+            </p>
+        {% endif %}
+    </div>
+{% endblock %}

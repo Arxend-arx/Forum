@@ -1,0 +1,113 @@
+{% extends "base.html" %}
+{% block title %}{{ profile_user.username }} - 个人资料 - AcademicForumLite{% endblock %}
+
+{% block content %}
+    <div class="card profile-header">
+        <div class="profile-avatar">
+            <span class="avatar-circle">{{ profile_user.username[:1].upper() }}</span>
+        </div>
+        <div class="profile-info">
+            <h2>{{ profile_user.username }}</h2>
+            <div class="register-time">注册于 {{ profile_user.create_time[:10] }}</div>
+
+            {% if profile_user.bio %}
+                <p class="profile-bio">{{ profile_user.bio }}</p>
+            {% endif %}
+
+            {% if profile_user.learning_interest %}
+                <div class="profile-interest">
+                    <span class="label">学习意向</span>
+                    <span>{{ profile_user.learning_interest }}</span>
+                </div>
+            {% endif %}
+        </div>
+
+        <div class="profile-actions">
+            {% if session.user_id == profile_user.id %}
+                <a href="{{ url_for('edit_profile') }}" class="btn btn-primary btn-sm">编辑资料</a>
+            {% elif session.user_id %}
+                <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+                    {# 好友相关按钮 #}
+                    {% if friend_status == 'friend' %}
+                        <a href="{{ url_for('chat_detail', user_id=profile_user.id) }}" class="btn btn-primary btn-sm">发消息</a>
+                        <form method="POST" action="{{ url_for('remove_friend') }}"
+                              onsubmit="return confirm('确定解除与 {{ profile_user.username }} 的好友关系吗？');">
+                            <input type="hidden" name="friend_id" value="{{ profile_user.id }}">
+                            <button type="submit" class="btn btn-danger btn-sm">解除好友</button>
+                        </form>
+                    {% elif friend_status == 'pending_sent' %}
+                        <a href="{{ url_for('friend_requests') }}" class="btn btn-cancel btn-sm">已发送请求</a>
+                    {% elif friend_status == 'pending_received' %}
+                        <a href="{{ url_for('friend_requests') }}" class="btn btn-primary btn-sm">接受好友请求</a>
+                    {% else %}
+                        <form method="POST" action="{{ url_for('add_friend') }}">
+                            <input type="hidden" name="user_id" value="{{ profile_user.id }}">
+                            <button type="submit" class="btn btn-primary btn-sm">加好友</button>
+                        </form>
+                    {% endif %}
+                    {# 关注按钮 #}
+                    <form method="POST" action="{{ url_for('toggle_follow', user_id=profile_user.id) }}">
+                        <button type="submit" class="btn btn-sm {{ 'btn-danger' if is_following else 'btn-cancel' }}">
+                            {{ '取消关注' if is_following else '关注' }}
+                        </button>
+                    </form>
+                </div>
+            {% endif %}
+        </div>
+    </div>
+
+    {# 统计卡片 #}
+    <div class="card stats-row">
+        <div class="stat-item">
+            <span class="stat-num">{{ post_count }}</span>
+            <span class="stat-label">帖子</span>
+        </div>
+        <div class="stat-item">
+            <span class="stat-num">{{ following_count }}</span>
+            <span class="stat-label">关注</span>
+        </div>
+        <div class="stat-item">
+            <span class="stat-num">{{ follower_count }}</span>
+            <span class="stat-label">粉丝</span>
+        </div>
+    </div>
+
+    {# 关注列表 #}
+    {% if following_list %}
+        <div class="card">
+            <h3>关注 ({{ following_count }})</h3>
+            <div class="user-list">
+                {% for u in following_list %}
+                    <a href="{{ url_for('profile', user_id=u.id) }}" class="user-tag">@{{ u.username }}</a>
+                {% endfor %}
+            </div>
+        </div>
+    {% endif %}
+
+    {# 粉丝列表 #}
+    {% if follower_list %}
+        <div class="card">
+            <h3>粉丝 ({{ follower_count }})</h3>
+            <div class="user-list">
+                {% for u in follower_list %}
+                    <a href="{{ url_for('profile', user_id=u.id) }}" class="user-tag">@{{ u.username }}</a>
+                {% endfor %}
+            </div>
+        </div>
+    {% endif %}
+
+    {# 最近的帖子 #}
+    <div class="card">
+        <h3>最近的帖子 ({{ post_count }})</h3>
+        {% if posts %}
+            {% for p in posts %}
+                <div class="post-item">
+                    <h3><a href="{{ url_for('post_detail', post_id=p.id) }}">{{ p.title }}</a></h3>
+                    <div class="meta">{{ p.create_time }}</div>
+                </div>
+            {% endfor %}
+        {% else %}
+            <p class="empty">暂无帖子</p>
+        {% endif %}
+    </div>
+{% endblock %}

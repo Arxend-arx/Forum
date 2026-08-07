@@ -1,0 +1,12 @@
+{
+  "patsnap": {
+    "mcp_url": "https://connect.zhihuiya.com/1458a4/mcp",
+    "api_key": "sk-ff56UIeQzQooJu77NsCBjux2V2dmOiiop0hUVwkJLMJ4eAsJ",
+    "patent_url_template": "https://worldwide.espacenet.com/patent/search?q=pn%3D{pn}"
+  },
+  "patsnap_literature": {
+    "mcp_url": "https://connect.zhihuiya.com/299425/mcp",
+    "api_key": ""
+  },
+  "_说明": "patsnap = 专利服务器(1458a4，勿改)，patsnap_literature = 学术论文服务器(299425)。patsnap_literature.api_key 留空自动复用专利Key（同一账户）；也可单独填。patent_url_template 默认 Espacenet（国内可访问）。文献跳转按 DOI/PMID 自动识别。也可用环境变量 PAT_SNAP_MCP_URL/PAT_SNAP_MCP_KEY/PAT_SNAP_LITERATURE_MCP_URL/PAT_SNAP_LITERATURE_MCP_KEY/PAT_SNAP_PATENT_URL_TEMPLATE 配置（优先级更高）。"
+}

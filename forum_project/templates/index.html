@@ -1,0 +1,28 @@
+{% extends "base.html" %}
+{% block title %}首页 - AcademicForumLite{% endblock %}
+
+{% block content %}
+    <h1 style="margin-bottom:20px;">全部帖子</h1>
+
+    {% if posts %}
+        <div class="card">
+            {% for post in posts %}
+                <div class="post-item">
+                    <h3><a href="{{ url_for('post_detail', post_id=post.id) }}">{{ post.title }}</a></h3>
+                    <div class="excerpt">
+                        {{ post.content | md | striptags | truncate(120, True) }}
+                    </div>
+                    <div class="meta">
+                        <a href="{{ url_for('profile', user_id=post.user_id) }}" class="user-link">{{ post.username }}</a>
+                        · {{ post.create_time }} ·
+                        评论 {{ post.comment_count }}
+                    </div>
+                </div>
+            {% endfor %}
+        </div>
+    {% else %}
+        <div class="card empty">
+            <p>暂无帖子，<a href="{{ url_for('create_post') }}">立即发布第一篇帖子</a></p>
+        </div>
+    {% endif %}
+{% endblock %}

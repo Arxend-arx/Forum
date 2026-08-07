@@ -1,0 +1,100 @@
+{# 富文本编辑器组件（发帖/评论共用）：文本/图片/视频/表情包/链接/@用户 #}
+{% macro editor(name='content', placeholder='', height='160px', text='') %}
+<div class="md-editor">
+    <div class="md-toolbar">
+        <button type="button" class="tb-btn" data-act="bold" title="加粗"><b>B</b></button>
+        <button type="button" class="tb-btn" data-act="italic" title="斜体"><i>I</i></button>
+        <button type="button" class="tb-btn" data-act="link" title="插入链接">🔗</button>
+        <button type="button" class="tb-btn" data-act="image" title="上传图片">🖼️</button>
+        <button type="button" class="tb-btn" data-act="video" title="上传视频">🎬</button>
+        <button type="button" class="tb-btn" data-act="emoji" title="表情包">😀</button>
+        <button type="button" class="tb-btn" data-act="at" title="提及用户 @">@</button>
+        <span class="tb-tip">支持 Markdown 语法：**加粗**、*斜体*、![图片/视频](地址)</span>
+        <input type="file" id="file-{{ name }}" accept="image/*,video/*" hidden>
+    </div>
+    <textarea id="{{ name }}" name="{{ name }}" placeholder="{{ placeholder }}"
+              style="min-height:{{ height }};">{{ text }}</textarea>
+    <div class="emoji-panel" id="emoji-{{ name }}" style="display:none;">
+        {% for e in '😀😁😂🤣😊😍😘😎🤔😅😭😡😱👍👎👏🙏💪🔥🎉❤️💔⭐🌟✨💡📚🔬🚀🎯🌍🏆🥇💯✅❌❓❗' %}<span class="emoji-item" data-emoji="{{ e }}">{{ e }}</span>{% endfor %}
+    </div>
+    <div class="editor-status" id="status-{{ name }}"></div>
+</div>
+<script>
+(function () {
+    var ta = document.getElementById('{{ name }}');
+    if (!ta) return;
+    var box = ta.closest('.md-editor');
+    var panel = document.getElementById('emoji-{{ name }}');
+    var status = document.getElementById('status-{{ name }}');
+    var fileInput = document.getElementById('file-{{ name }}');
+
+    function insert(before, after) {
+        var s = ta.selectionStart, e = ta.selectionEnd, v = ta.value;
+        var sel = v.substring(s, e) || '文本';
+        ta.value = v.substring(0, s) + before + sel + after + v.substring(e);
+        ta.focus();
+        ta.selectionStart = ta.selectionEnd = s + before.length + sel.length;
+    }
+    function insertPlain(txt) {
+        var s = ta.selectionStart, e = ta.selectionEnd, v = ta.value;
+        ta.value = v.substring(0, s) + txt + v.substring(e);
+        ta.focus();
+        ta.selectionStart = ta.selectionEnd = s + txt.length;
+    }
+    function upload(file, isVideo) {
+        if (!file) return;
+        var fd = new FormData();
+        fd.append('file', file);
+        status.textContent = '上传中...';
+        status.className = 'editor-status';
+        fetch('{{ url_for('upload_file') }}', {method: 'POST', body: fd})
+            .then(function (r) {
+                return r.json().then(function (d) { return {ok: r.ok, d: d}; });
+            })
+            .then(function (res) {
+                if (!res.ok) {
+                    status.textContent = '上传失败：' + (res.d.error || '未知错误');
+                    status.className = 'editor-status err';
+                    return;
+                }
+                status.textContent = '上传成功';
+                status.className = 'editor-status ok';
+                insertPlain(isVideo ? '![' + (file.name || '视频') + '](' + res.d.url + ')\n'
+                                     : '![](' + res.d.url + ')\n');
+            })
+            .catch(function () {
+                status.textContent = '上传失败';
+                status.className = 'editor-status err';
+            });
+    }
+
+    box.querySelectorAll('.tb-btn').forEach(function (btn) {
+        btn.addEventListener('click', function () {
+            var act = btn.getAttribute('data-act');
+            if (act === 'bold') { insert('**', '**'); }
+            else if (act === 'italic') { insert('*', '*'); }
+            else if (act === 'link') {
+                var u = prompt('输入链接地址（http/https 或站内 / 路径）：', 'https://');
+                if (u) insert('[链接文字](' + u + ')', '');
+            }
+            else if (act === 'image' || act === 'video') { fileInput.dataset.mode = act; fileInput.click(); }
+            else if (act === 'emoji') { panel.style.display = panel.style.display === 'none' ? 'flex' : 'none'; }
+            else if (act === 'at') {
+                var name = prompt('输入要@的用户名：', '@');
+                if (name) insertPlain((name.charAt(0) === '@' ? name : '@' + name) + ' ');
+            }
+        });
+    });
+    fileInput.addEventListener('change', function () {
+        upload(fileInput.files[0], fileInput.dataset.mode === 'video');
+        fileInput.value = '';
+    });
+    panel.querySelectorAll('.emoji-item').forEach(function (sp) {
+        sp.addEventListener('click', function () {
+            insertPlain(sp.getAttribute('data-emoji'));
+            panel.style.display = 'none';
+        });
+    });
+})();
+</script>
+{% endmacro %}

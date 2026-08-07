@@ -1,0 +1,98 @@
+{% extends "base.html" %}
+{% from "_editor.html" import editor %}
+{% block title %}与 {{ other.username }} 聊天 - AcademicForumLite{% endblock %}
+
+{% block content %}
+    <style>
+        .chat-header { display:flex; align-items:center; gap:12px; }
+        .chat-msgs {
+            max-height: 52vh; overflow-y: auto; padding: 8px 4px;
+            display: flex; flex-direction: column; gap: 10px;
+        }
+        .bubble {
+            max-width: 78%; padding: 10px 14px; border-radius: 12px;
+            font-size: .92rem; line-height: 1.7; word-break: break-word;
+        }
+        .bubble.mine {
+            align-self: flex-end; background: #4a6cf7; color: #fff;
+            border-bottom-right-radius: 4px;
+        }
+        .bubble.theirs {
+            align-self: flex-start; background: #2a2a44; color: #d0d0d8;
+            border-bottom-left-radius: 4px;
+        }
+        .bubble .md-content { font-size: .92rem; color: inherit; }
+        .bubble .md-content p { margin: .3em 0; }
+        .bubble.mine .md-content a { color: #cfd8ff; }
+        .bubble.mine .md-content code { background: rgba(255,255,255,.18); color: #eaf0ff; }
+        .bubble.mine .md-content pre { background: rgba(0,0,0,.25); color: #fff; }
+        .bubble.mine .md-content blockquote { border-color: #cfd8ff; color: #dfe4ff; background: rgba(0,0,0,.15); }
+        .msg-time { font-size: .7rem; color: #6a6a80; text-align:center; margin: 4px 0; }
+        .chat-send { display:flex; gap:8px; align-items:flex-end; margin-top: 12px; }
+        .chat-send .md-editor { flex: 1; }
+    </style>
+
+    <div class="card">
+        <div class="chat-header">
+            <a href="{{ url_for('profile', user_id=other.id) }}">
+                <span class="avatar-circle" style="width:44px;height:44px;font-size:1.1rem;">{{ other.username[:1].upper() }}</span>
+            </a>
+            <div style="flex:1;">
+                <h2 style="margin-bottom:2px;">
+                    <a href="{{ url_for('profile', user_id=other.id) }}" style="color:#e8e8f4;">{{ other.username }}</a>
+                </h2>
+                <div class="meta" style="margin:0;">
+                    {% if is_friend %}好友 · 可聊天{% else %}非好友（仅好友之间可私信）{% endif %}
+                </div>
+            </div>
+            <a href="{{ url_for('chat') }}" class="btn btn-cancel btn-sm">返回聊天列表</a>
+        </div>
+    </div>
+
+    {# 消息记录 #}
+    <div class="card">
+        <div class="chat-msgs" id="chat-msgs">
+            {% if msgs %}
+                {% set ns = namespace(last_date='') %}
+                {% for m in msgs %}
+                    {% if m.create_time[:10] != ns.last_date %}
+                        <div class="msg-time">{{ m.create_time[:10] }}</div>
+                        {% set ns.last_date = m.create_time[:10] %}
+                    {% endif %}
+                    <div class="bubble {{ 'mine' if m.sender_id == my_id else 'theirs' }}">
+                        <div class="md-content">{{ m.content | md | safe }}</div>
+                        <div style="font-size:.68rem;opacity:.65;margin-top:4px;text-align:right;">{{ m.create_time[11:16] }}</div>
+                    </div>
+                {% endfor %}
+            {% else %}
+                <p class="empty" style="padding:24px 0;">还没有消息，打个招呼吧</p>
+            {% endif %}
+        </div>
+
+        {# 发送区（富文本：文本/图片/视频/表情/链接） #}
+        {% if is_friend %}
+            <form method="POST" action="{{ url_for('chat_send', user_id=other.id) }}" class="chat-send">
+                {{ editor('content', '输入消息，支持图片/视频/表情/链接...', '70px') }}
+                <button type="submit" class="btn btn-primary" style="height:70px;padding:10px 22px;">发送</button>
+            </form>
+        {% else %}
+            <p class="mt-2" style="font-size:.85rem;color:#ffd93d;">
+                仅好友之间可以聊天。
+                <a href="{{ url_for('add_friend') }}" onclick="event.preventDefault();document.getElementById('add-friend-form').submit();">先加 {{ other.username }} 为好友</a>
+            </p>
+            <form id="add-friend-form" method="POST" action="{{ url_for('add_friend') }}" style="display:none;">
+                <input type="hidden" name="user_id" value="{{ other.id }}">
+            </form>
+        {% endif %}
+    </div>
+
+    <p class="mt-2"><a href="{{ url_for('chat') }}">&larr; 返回聊天列表</a></p>
+
+    <script>
+        (function () {
+            var box = document.getElementById('chat-msgs');
+            if (box) box.scrollTop = box.scrollHeight;
+            if (location.hash === '#bottom') location.hash = '';
+        })();
+    </script>
+{% endblock %}
