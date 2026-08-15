@@ -1,0 +1,18 @@
+# 构建上下文排除项
+.git
+.gitignore
+__pycache__/
+*.pyc
+*.pyo
+data/
+frontend/node_modules/
+frontend/dist/
+frontend/.vite/
+*.rar
+*.zip
+*.md
+doc/
+SQLiteExpert/
+SQLiteExpert.rar
+filezilla64876/
+filezilla64876.zip

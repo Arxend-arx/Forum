@@ -1,0 +1,100 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-theme="dark">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Academy · Prototype A — 首页</title>
+<link rel="stylesheet" href="prototype-a.css">
+</head>
+<body>
+<div class="layout">
+
+  <!-- 侧栏 -->
+  <aside class="sidebar">
+    <a class="brand" href="prototype-a.html">
+      <span class="logo">A</span>
+      <span class="name" data-i18n="brand">Academy</span>
+    </a>
+    <nav class="nav" id="nav"></nav>
+    <div id="sideBottom"></div>
+  </aside>
+
+  <!-- 主内容 -->
+  <main class="main">
+    <div class="page-head">
+      <div>
+        <h1 data-i18n="latestPosts">最新帖子</h1>
+        <div class="sub" data-i18n="liveFeed">实时更新</div>
+      </div>
+      <div class="actions">
+        <a class="btn btn-primary" href="prototype-a-create.html">+ <span data-i18n="newPost">发布帖子</span></a>
+      </div>
+    </div>
+    <div id="feed"></div>
+  </main>
+
+  <!-- 右侧栏 -->
+  <aside class="rail">
+    <div class="rail-card">
+      <h4 data-i18n="profile">活跃用户</h4>
+      <a class="rail-user" href="prototype-a-profile.html"><span class="avatar">林</span><div><div class="n">林晚舟</div><div class="s" id="railPosts1"></div></div></a>
+      <a class="rail-user" href="prototype-a-profile.html"><span class="avatar">北</span><div><div class="n">北辰光</div><div class="s" id="railPosts2"></div></div></a>
+      <a class="rail-user" href="prototype-a-profile.html"><span class="avatar">苏</span><div><div class="n">苏黎</div><div class="s" id="railPosts3"></div></div></a>
+    </div>
+    <div class="rail-card">
+      <h4># 热门标签</h4>
+      <span class="chip">#深度学习</span><span class="chip">#学术检索</span><span class="chip">#前端工程</span><span class="chip">#LLM</span><span class="chip">#论文阅读</span>
+    </div>
+    <div class="rail-card">
+      <h4>社区统计</h4>
+      <div class="stats">
+        <div><div class="num">128</div><div class="lbl" data-i18n="postCount">帖子</div></div>
+        <div><div class="num">46</div><div class="lbl" data-i18n="follower">用户</div></div>
+        <div><div class="num">9</div><div class="lbl" data-i18n="online">在线</div></div>
+      </div>
+    </div>
+  </aside>
+</div>
+
+<script src="prototype-a-common.js"></script>
+<script>
+const POSTS = [
+  {a:"林晚舟", t:"2026-08-07 09:24", tag:"#深度学习", title:"从零实现一个轻量 RAG 问答系统的心得",
+   ex:"最近把文档检索 + 向量化的流程整个跑通了，记录一下踩过的坑：分块粒度、Embedding 模型选择、以及召回排序的取舍……", cm:23, lk:47},
+  {a:"北辰光", t:"2026-08-06 21:10", tag:"#前端工程", title:"React + Vite 项目里我是如何组织目录的",
+   ex:"组件、页面、hooks、api、i18n、主题，每一层的职责边界清晰，重构时省了非常多的时间，分享我的目录规范……", cm:15, lk:32},
+  {a:"苏黎", t:"2026-08-06 14:02", tag:"#论文阅读", title:"Attention Is All You Need 读后笔记（一）",
+   ex:"重新精读了一遍 Transformer 原文，把自注意力、位置编码、训练技巧整理成了一份可复用的读书模板……", cm:31, lk:56},
+  {a:"星野原", t:"2026-08-05 18:47", tag:"#LLM", title:"Using open-source models for local academic search",
+   ex:"A practical walkthrough of self-hosted embedding + rerank pipelines for literature retrieval, with latency budgets.", cm:9, lk:21}
+];
+function renderFeed(){
+  const L = t;
+  document.getElementById('feed').innerHTML = POSTS.map((p,i)=>`
+    <article class="card post click">
+      <div class="head">
+        <span class="avatar">${avatarChar(p.a)}</span>
+        <div class="meta">
+          <div class="author">${p.a} <small>· ${p.t}</small></div>
+          <div class="time">${p.tag}</div>
+        </div>
+        <span class="tag">${p.tag}</span>
+      </div>
+      <h3><a href="prototype-a-post.html">${p.title}</a></h3>
+      <p class="excerpt">${p.ex}</p>
+      <div class="foot">
+        <span class="stat">${icon('M21 11.5a8.4 8.4 0 0 1-9 8.4 8.6 8.6 0 0 1-3.4-.7L3 21l1.8-5.6A8.4 8.4 0 1 1 21 11.5z')} ${p.cm} ${L('comments')}</span>
+        <span class="stat">${icon('M7 10v12M15 5.9V2a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v18a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.9z')} ${p.lk} ${L('like')}</span>
+        <a class="menu" href="prototype-a-post.html">${L('readMore')} →</a>
+      </div>
+    </article>`).join('');
+  document.getElementById('railPosts1').textContent = '12 ' + L('postCount');
+  document.getElementById('railPosts2').textContent = '8 ' + L('postCount');
+  document.getElementById('railPosts3').textContent = '6 ' + L('postCount');
+}
+document.addEventListener('langchange', renderFeed);
+renderNav('home');
+renderFeed();
+</script>
+</body>
+</html>

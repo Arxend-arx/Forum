@@ -1,0 +1,120 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-theme="dark">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Academy · Prototype A — 帖子详情</title>
+<link rel="stylesheet" href="prototype-a.css">
+</head>
+<body>
+<div class="layout">
+
+  <aside class="sidebar">
+    <a class="brand" href="prototype-a.html"><span class="logo">A</span><span class="name" data-i18n="brand">Academy</span></a>
+    <nav class="nav" id="nav"></nav>
+    <div id="sideBottom"></div>
+  </aside>
+
+  <main class="main">
+    <a class="muted" href="prototype-a.html" style="font-size:13px">← <span data-i18n="back">返回</span></a>
+
+    <article class="card mt-2">
+      <span class="tag mb-2" style="display:inline-block">#深度学习</span>
+      <h1 style="font-size:24px;font-weight:800;line-height:1.4;margin:10px 0 12px">从零实现一个轻量 RAG 问答系统的心得</h1>
+      <div class="head" style="margin-bottom:6px">
+        <span class="avatar">林</span>
+        <div class="meta">
+          <div class="author"><a href="prototype-a-profile.html">林晚舟</a> <small data-i18n="author">作者</small></div>
+          <div class="time" data-i18n="created">发布于</div>
+        </div>
+      </div>
+      <div class="muted" style="font-size:12.5px;display:flex;gap:16px;margin-bottom:8px">
+        <span>2026-08-07 09:24</span>
+        <span>23 <span data-i18n="comments">评论</span></span>
+        <span>47 <span data-i18n="like">赞</span></span>
+      </div>
+      <div class="divider"></div>
+      <div class="md" id="mdContent"></div>
+      <div class="foot mt-3">
+        <button class="btn btn-ghost btn-sm" onclick="toast('info', t('saved'))">👍 47</button>
+        <button class="btn btn-danger btn-sm" onclick="modal(t('deletePost'), t('confirmDelPost'), ()=>toast('success', t('saved')))">🗑</button>
+      </div>
+    </article>
+
+    <div class="page-head mt-3">
+      <div><h1 style="font-size:18px">23 <span data-i18n="comments">评论</span></h1></div>
+    </div>
+
+    <div class="card">
+      <div class="row" style="align-items:flex-start">
+        <span class="avatar">星</span>
+        <div class="grow">
+          <textarea class="textarea" style="min-height:70px" data-i18n-ph="commentPh" placeholder="写下你的评论…（@用户名 可提及他人）"></textarea>
+          <div class="row mt-2" style="justify-content:flex-end">
+            <button class="btn btn-primary btn-sm" onclick="toast('success', t('saved'))" data-i18n="submitComment">发表评论</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div id="comments" class="card" style="padding-top:6px;padding-bottom:6px"></div>
+  </main>
+</div>
+
+<script src="prototype-a-common.js"></script>
+<script>
+const MD = `最近把**文档检索 + 向量化**的流程整个跑通了，记录一下踩过的坑，希望对大家有帮助。
+
+## 1. 分块粒度
+
+> 分块太小丢失语义，太大稀释相似度。经验值：**512 tokens + 10% 重叠**。
+
+## 2. Embedding 模型选择
+
+- 中文场景优先考虑 \`bge-large-zh\`
+- 英文场景 \`e5-large-v2\` 表现稳定
+
+## 3. 召回排序的取舍
+
+先 BM25 粗排 + 向量精排，最后用 Cross-Encoder 重排，效果和性价比都不错：
+
+\`\`\`python
+results = bm25.search(q) + vec.search(q)
+results = reranker.rerank(q, results)
+\`\`\`
+
+视频与图片：发帖时可上传图片（≤5MB）或视频（≤100MB），正文会以内嵌媒体渲染（原型页不加载真实上传文件）。
+
+更多细节欢迎评论区讨论～`;
+const COMMENTS = [
+  {a:"苏黎", t:"2026-08-07 10:12", txt:"分块粒度那里很有启发，我之前一直用固定 1024，召回确实差一些。"},
+  {a:"北辰光", t:"2026-08-07 11:30", txt:"BM25 + 向量混合检索确实是工程上最稳的组合，感谢分享！"},
+  {a:"白鹭洲", t:"2026-08-07 12:05", txt:"请问 reranker 你们用的是哪个模型？部署成本怎么样？"}
+];
+function render(){
+  document.getElementById('mdContent').innerHTML = MD
+    .replace(/```python\n([\s\S]*?)```/g, (m, code) => '<pre><code>' + esc(code) + '</code></pre>')
+    .replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>')
+    .replace(/`([^`]+)`/g, '<code>$1</code>')
+    .replace(/^### (.*)$/gm, '<h3>$1</h3>')
+    .replace(/^## (.*)$/gm, '<h2>$1</h2>')
+    .replace(/^> (.*)$/gm, '<blockquote>$1</blockquote>')
+    .replace(/\n\n/g, '</p><p>')
+    .replace(/!\[([^\]]*)\]\(([^)\s]+)\)/g, '<img src="$2" alt="$1" style="border-radius:10px">')
+    .replace(/^# (.*)$/gm, '<h1>$1</h1>');
+  document.getElementById('comments').innerHTML = COMMENTS.map(c=>`
+    <div class="comment">
+      <span class="avatar" style="width:32px;height:32px;font-size:12px">${avatarChar(c.a)}</span>
+      <div class="body">
+        <div class="c-meta"><span class="c-author">${c.a}</span><span class="c-time">${c.t}</span></div>
+        <div class="c-text">${c.txt}</div>
+        <div class="c-actions"><span style="cursor:pointer">👍</span><span style="cursor:pointer">💬</span></div>
+      </div>
+    </div>`).join('');
+}
+document.addEventListener('langchange', render);
+renderNav('home');
+render();
+</script>
+</body>
+</html>

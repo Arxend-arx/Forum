@@ -1,0 +1,50 @@
+services:
+  db:
+    image: hub.rat.dev/library/postgres:16-alpine
+    container_name: academy-db
+    security_opt:
+      # 老内核(3.10) + Docker 默认 seccomp 会拦 postgres 写文件(EPERM)，放开
+      - seccomp=unconfined
+    environment:
+      POSTGRES_USER: academy
+      POSTGRES_PASSWORD: academy_pass
+      POSTGRES_DB: academy
+    volumes:
+      # SELinux Enforcing：bind mount + :Z 让 Docker 重标签为容器可写
+      - ./pgdata:/var/lib/postgresql/data:Z
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U academy"]
+      interval: 5s
+      timeout: 3s
+      retries: 15
+
+  backend:
+    image: forum_project-backend:latest
+    container_name: academy-backend
+    security_opt:
+      - seccomp=unconfined
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      PGHOST: db
+      PGUSER: academy
+      PGPASSWORD: academy_pass
+      PGDATABASE: academy
+      UPLOAD_DIR: /app/static/uploads
+      FLASK_DEBUG: "0"
+    volumes:
+      - ./uploads:/app/static/uploads:Z
+    expose:
+      - "5000"
+
+  frontend:
+    image: forum_project-frontend:latest
+    container_name: academy-frontend
+    security_opt:
+      - seccomp=unconfined
+    depends_on:
+      - backend
+    ports:
+      # 公网 15000 → 机房NAT → 内网 5000 → 新版（顶替已下线老版本）
+      - "5000:80"

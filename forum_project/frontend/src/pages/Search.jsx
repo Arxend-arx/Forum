@@ -1,0 +1,78 @@
+import React, { useEffect, useState } from 'react'
+import { Link, useNavigate, useSearchParams } from 'react-router-dom'
+import { useTranslation } from 'react-i18next'
+import { api } from '../api/client'
+import { Avatar, EmptyState, TagChips } from '../components'
+
+export default function Search() {
+  const { t } = useTranslation()
+  const navigate = useNavigate()
+  const [params, setParams] = useSearchParams()
+  const q = params.get('q') || ''
+  const [input, setInput] = useState(q)
+  const [tab, setTab] = useState(0)
+  const [data, setData] = useState(null)
+
+  useEffect(() => {
+    if (!q) { setData({ posts: [], users: [] }); return }
+    let alive = true
+    api.get(`/search?q=${encodeURIComponent(q)}`).then((d) => alive && setData(d)).catch(() => alive && setData({ posts: [], users: [] }))
+    return () => { alive = false }
+  }, [q])
+
+  const run = () => setParams({ q: input })
+
+  return (
+    <>
+      <div className="page-head">
+        <div className="searchbox grow">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+            <circle cx="11" cy="11" r="7" /><path d="M21 21l-4.3-4.3" />
+          </svg>
+          <input value={input} placeholder={t('searchPh')} onChange={(e) => setInput(e.target.value)}
+            onKeyDown={(e) => e.key === 'Enter' && run()} />
+        </div>
+        <button className="btn btn-primary" onClick={run}>{t('search')}</button>
+      </div>
+
+      <div className="tabs">
+        <button className={tab === 0 ? 'active' : ''} onClick={() => setTab(0)}>{t('posts')}</button>
+        <button className={tab === 1 ? 'active' : ''} onClick={() => setTab(1)}>{t('users')}</button>
+      </div>
+
+      {!data ? null : tab === 0 ? (
+        data.posts.length === 0
+          ? <EmptyState title={t('noResult')} desc={t('tryOther')} />
+          : data.posts.map((p) => (
+            <article key={p.id} className="card post click">
+              <div className="head">
+                <Avatar name={p.author} />
+                <div className="meta">
+                  <div className="author">{p.author} <small>· {p.create_time}</small></div>
+                </div>
+              </div>
+              <h3><Link to={`/post/${p.id}`}>{p.title}</Link></h3>
+              <TagChips tags={p.tags} onPick={(tg) => navigate(`/?tag=${encodeURIComponent(tg)}`)} />
+              <p className="excerpt">{p.content}</p>
+              <div className="foot">
+                <span className="stat">{p.comment_count} {t('comments')}</span>
+              </div>
+            </article>
+          ))
+      ) : (
+        data.users.length === 0
+          ? <EmptyState title={t('noResult')} desc={t('tryOther')} />
+          : data.users.map((u) => (
+            <Link key={u.id} className="list-item" to={`/profile/${u.id}`}>
+              <Avatar name={u.username} />
+              <div className="main">
+                <div className="title">{u.username}</div>
+                <div className="desc">{u.bio || t('notSet')}</div>
+              </div>
+              <span className="tag">@ {u.username}</span>
+            </Link>
+          ))
+      )}
+    </>
+  )
+}

@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-theme="dark">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Academy · Prototype A — 聊天</title>
+<link rel="stylesheet" href="prototype-a.css">
+</head>
+<body>
+<div class="layout">
+
+  <aside class="sidebar">
+    <a class="brand" href="prototype-a.html"><span class="logo">A</span><span class="name" data-i18n="brand">Academy</span></a>
+    <nav class="nav" id="nav"></nav>
+    <div id="sideBottom"></div>
+  </aside>
+
+  <main class="main">
+    <div class="page-head">
+      <div>
+        <h1 data-i18n="chatTitle">聊天</h1>
+        <div class="sub">2 <span data-i18n="friends">好友</span> · 3 <span data-i18n="recent">最近对话</span></div>
+      </div>
+      <div class="actions">
+        <a class="btn btn-ghost btn-sm" href="prototype-a-friends.html" data-i18n="friendsTitle">好友请求</a>
+      </div>
+    </div>
+
+    <div class="card" style="padding:8px 10px">
+      <div class="list-item">
+        <span class="avatar">苏</span>
+        <div class="main">
+          <div class="title">苏黎 <span class="tag success" style="margin-left:6px">●</span></div>
+          <div class="desc">Attention Is All You Need 读后笔记那篇写得真好…</div>
+        </div>
+        <div class="right"><div>10:32</div><div><span class="badge" style="background:var(--primary)">2</span></div></div>
+      </div>
+      <div class="list-item">
+        <span class="avatar">北</span>
+        <div class="main">
+          <div class="title">北辰光</div>
+          <div class="desc">目录组织那篇我转给同事了，都很受用</div>
+        </div>
+        <div class="right"><div>昨天</div></div>
+      </div>
+      <div class="list-item">
+        <span class="avatar">白</span>
+        <div class="main">
+          <div class="title">白鹭洲</div>
+          <div class="desc">周末一起看论文吗？</div>
+        </div>
+        <div class="right"><div>08-05</div></div>
+      </div>
+    </div>
+  </main>
+</div>
+
+<script src="prototype-a-common.js"></script>
+<script>
+renderNav('chat');
+</script>
+</body>
+</html>

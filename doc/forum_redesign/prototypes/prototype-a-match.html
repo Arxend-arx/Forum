@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-theme="dark">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Academy · Prototype A — 学术匹配</title>
+<link rel="stylesheet" href="prototype-a.css">
+</head>
+<body>
+<div class="layout">
+
+  <aside class="sidebar">
+    <a class="brand" href="prototype-a.html"><span class="logo">A</span><span class="name" data-i18n="brand">Academy</span></a>
+    <nav class="nav" id="nav"></nav>
+    <div id="sideBottom"></div>
+  </aside>
+
+  <main class="main">
+    <div class="page-head">
+      <div>
+        <h1 data-i18n="matchTitle">学术资源匹配</h1>
+        <div class="sub" data-i18n="matchSub">基于智慧芽 MCP 检索专利与文献，并可调用大模型分析匹配度</div>
+      </div>
+      <div class="actions">
+        <a class="btn btn-ghost btn-sm" href="prototype-a-match-history.html" data-i18n="matchHistory">检索历史</a>
+        <a class="btn btn-ghost btn-sm" href="prototype-a-llm-settings.html" data-i18n="settings">LLM 设置</a>
+      </div>
+    </div>
+
+    <!-- 状态卡片 -->
+    <div class="row wrap" style="gap:12px;margin-bottom:18px">
+      <div class="card" style="flex:1;min-width:180px;padding:16px 18px;margin:0">
+        <div class="row"><span class="status ok"><span class="dot"></span><span data-i18n="mcpReady">MCP 服务正常</span></span></div>
+        <div class="muted mt-1" style="font-size:12.5px">connect.zhihuiya.com</div>
+      </div>
+      <div class="card" style="flex:1;min-width:180px;padding:16px 18px;margin:0">
+        <div class="row"><span class="status ok"><span class="dot"></span><span data-i18n="llmReady">LLM 已配置</span></span></div>
+        <div class="muted mt-1" style="font-size:12.5px">gpt-4o-mini</div>
+      </div>
+    </div>
+
+    <form class="card form" onsubmit="event.preventDefault();document.getElementById('searchBtn').textContent=t('searching');setTimeout(()=>location.href='prototype-a-match-result.html',900)">
+      <div class="form-group">
+        <label data-i18n="keywordPh">检索关键词</label>
+        <input class="input" value="Transformer 注意力机制" data-i18n-ph="keywordPh" placeholder="输入检索关键词，如：Transformer">
+      </div>
+      <label class="switch">
+        <div><div class="lbl" data-i18n="useInterest">使用我的学习意向增强检索</div><div class="dsc">深度学习、信息检索、NLP</div></div>
+        <input type="checkbox" checked>
+      </label>
+      <label class="switch">
+        <div><div class="lbl" data-i18n="useLLM">使用大模型生成匹配度分析</div><div class="dsc">gpt-4o-mini</div></div>
+        <input type="checkbox" checked>
+      </label>
+      <button class="btn btn-primary btn-lg btn-block" id="searchBtn" type="submit" data-i18n="runSearch">开始检索</button>
+    </form>
+  </main>
+</div>
+
+<script src="prototype-a-common.js"></script>
+<script>
+renderNav('match');
+</script>
+</body>
+</html>

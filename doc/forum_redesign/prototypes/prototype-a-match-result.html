@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-theme="dark">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Academy · Prototype A — 匹配结果</title>
+<link rel="stylesheet" href="prototype-a.css">
+</head>
+<body>
+<div class="layout">
+
+  <aside class="sidebar">
+    <a class="brand" href="prototype-a.html"><span class="logo">A</span><span class="name" data-i18n="brand">Academy</span></a>
+    <nav class="nav" id="nav"></nav>
+    <div id="sideBottom"></div>
+  </aside>
+
+  <main class="main">
+    <div class="page-head">
+      <div>
+        <h1 data-i18n="matchResult">匹配结果</h1>
+        <div class="sub">"Transformer 注意力机制" · 10 <span data-i18n="resultCount">结果</span></div>
+      </div>
+      <div class="actions">
+        <a class="btn btn-ghost btn-sm" href="prototype-a-match.html" data-i18n="backToMatch">返回检索</a>
+        <a class="btn btn-ghost btn-sm" href="prototype-a-match-history.html" data-i18n="matchHistory">检索历史</a>
+      </div>
+    </div>
+
+    <!-- LLM 分析摘要 -->
+    <div class="card" style="border-color:rgba(79,107,255,.4)">
+      <div class="card-title" style="color:var(--primary-2)">✨ <span data-i18n="summary">匹配度分析</span></div>
+      <div class="md" id="summary"></div>
+    </div>
+
+    <div class="tabs">
+      <button class="active" onclick="switchTab(this,0)"><span data-i18n="patents">专利</span> · 6</button>
+      <button onclick="switchTab(this,1)"><span data-i18n="literature">文献</span> · 4</button>
+    </div>
+    <div id="tabBody"></div>
+  </main>
+</div>
+
+<script src="prototype-a-common.js"></script>
+<script>
+const SUMMARY = `基于你的学习意向（**深度学习、信息检索、NLP**），本次检索结果匹配度**较高**。
+
+- **专利方向**：注意力机制相关专利 6 件，其中 3 件与自注意力架构优化强相关；
+- **文献方向**：高被引文献 4 篇，建议优先阅读 *Attention Is All You Need* 及其后续综述；
+- **建议**：结合 Transformer 变体（Longformer / FlashAttention）进一步缩小范围。`;
+const PATENTS = [
+  {t:"基于自注意力机制的自然语言处理模型训练方法", src:"CN2023…A", d:"2023-05-12", app:"某科技有限公司", abs:"本发明公开一种基于自注意力机制的模型训练方法，通过稀疏化注意力矩阵降低计算复杂度……"},
+  {t:"Transformer 架构的推理加速装置与方法", src:"US2024…B2", d:"2024-01-30", app:"Acme Research Inc.", abs:"提出一种针对 Transformer 推理阶段的自适应剪枝方案……"}
+];
+const LITERATURE = [
+  {t:"Attention Is All You Need", src:"arXiv:1706.03762", d:"2017-06", app:"Vaswani et al.", abs:"提出完全基于注意力机制的 Transformer 架构，替代循环网络……"},
+  {t:"Longformer: The Long-Document Transformer", src:"arXiv:2004.05150", d:"2020-04", app:"Beltagy et al.", abs:"提出稀疏注意力模式，将 Transformer 扩展到长文档……"}
+];
+function md(s){ return s
+  .replace(/\*\*([^*]+)\*\*/g,'<strong>$1</strong>')
+  .replace(/\*([^*]+)\*/g,'<em>$1</em>')
+  .replace(/^- (.*)$/gm,'<li>$1</li>')
+  .replace(/(<li>[\s\S]*?<\/li>)/g, m => '<ul>'+m+'</ul>')
+  .replace(/\n/g,'<br>'); }
+function switchTab(btn, idx){
+  document.querySelectorAll('.tabs button').forEach(b=>b.classList.remove('active'));
+  btn.classList.add('active');
+  const L = t;
+  const src = idx===0 ? PATENTS : LITERATURE;
+  const type = idx===0 ? 'patents' : 'literature';
+  document.getElementById('tabBody').innerHTML = src.map(r=>`
+    <div class="result-card">
+      <div class="r-title"><a href="#">${r.t}</a></div>
+      <div class="r-meta">
+        <span class="tag">${r.src}</span>
+        <span class="tag">${r.d}</span>
+        <span class="tag">${r.app}</span>
+      </div>
+      <p class="r-abs hide" id="abs-${r.src}">${r.abs}</p>
+      <div class="row mt-1" style="gap:8px">
+        <button class="btn btn-ghost btn-sm" onclick="var a=document.getElementById('abs-${r.src}');a.classList.toggle('hide');this.textContent=a.classList.contains('hide')?'${L('expand')}':'${L('collapse')}'">${L('expand')}</button>
+      </div>
+    </div>`).join('');
+}
+document.getElementById('summary').innerHTML = md(SUMMARY);
+document.addEventListener('langchange', ()=>switchTab(document.querySelector('.tabs button.active')||document.querySelector('.tabs button'), 0));
+renderNav('match');
+switchTab(document.querySelector('.tabs button'), 0);
+</script>
+</body>
+</html>

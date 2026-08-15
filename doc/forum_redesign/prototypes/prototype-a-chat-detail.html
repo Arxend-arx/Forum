@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-theme="dark">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Academy · Prototype A — 聊天详情</title>
+<link rel="stylesheet" href="prototype-a.css">
+</head>
+<body>
+<div class="layout">
+
+  <aside class="sidebar">
+    <a class="brand" href="prototype-a.html"><span class="logo">A</span><span class="name" data-i18n="brand">Academy</span></a>
+    <nav class="nav" id="nav"></nav>
+    <div id="sideBottom"></div>
+  </aside>
+
+  <main class="main">
+    <div class="page-head">
+      <div class="row" style="gap:12px">
+        <span class="avatar">苏</span>
+        <div>
+          <h1 style="font-size:19px">苏黎</h1>
+          <div class="sub" style="color:var(--success)">● <span data-i18n="on">在线</span></div>
+        </div>
+      </div>
+      <div class="actions">
+        <a class="btn btn-ghost btn-sm" href="prototype-a-chat.html">← <span data-i18n="back">返回</span></a>
+      </div>
+    </div>
+
+    <div class="card msgs" id="msgs" style="max-height:52vh;overflow-y:auto"></div>
+
+    <div class="card mt-2" style="padding:14px">
+      <div class="row" style="align-items:flex-end;gap:10px">
+        <span class="avatar" style="width:34px;height:34px;font-size:13px">星</span>
+        <div class="grow">
+          <textarea class="textarea" id="input" style="min-height:56px" data-i18n-ph="typeMsg" placeholder="输入消息…"></textarea>
+        </div>
+        <button class="btn btn-primary" onclick="sendMsg()" data-i18n="send">发送</button>
+      </div>
+    </div>
+  </main>
+</div>
+
+<script src="prototype-a-common.js"></script>
+<script>
+const MSGS = [
+  {a:"苏", t:"10:02", txt:"你看了我最新那篇 Attention 读后笔记吗？", mine:false},
+  {a:"星", t:"10:05", txt:"看了！自注意力的几何解释那部分很赞。", mine:true},
+  {a:"苏", t:"10:32", txt:"嗯嗯，我下一步打算写写位置编码的演进。", mine:false}
+];
+function render(){
+  const L = t;
+  document.getElementById('msgs').innerHTML = MSGS.map(m=>`
+    <div class="msg ${m.mine?'mine':''}">
+      <span class="avatar" style="width:32px;height:32px;font-size:12px">${m.mine?'星':m.a}</span>
+      <div class="bubble">${m.txt}</div>
+      <span class="time">${m.t}</span>
+    </div>`).join('') + (MSGS.length===0 ? `<div class="empty" style="padding:30px"><h3>${L('emptyChat')}</h3></div>` : '');
+  const box = document.getElementById('msgs'); box.scrollTop = box.scrollHeight;
+}
+function sendMsg(){
+  const v = document.getElementById('input').value.trim();
+  if(!v) return;
+  MSGS.push({a:"星", t:"刚刚", txt:v, mine:true});
+  document.getElementById('input').value='';
+  render();
+}
+document.addEventListener('langchange', render);
+renderNav('chat');
+render();
+</script>
+</body>
+</html>

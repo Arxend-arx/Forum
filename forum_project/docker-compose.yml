@@ -1,0 +1,60 @@
+# ============================================================
+# Academy Forum — 三容器分离部署编排（PostgreSQL 版）
+#   frontend : Nginx 托管 SPA（对外 8080），反代 /api 与 /uploads 到 backend
+#   backend  : Flask REST API（内部 5000，不对外），连接 PostgreSQL
+#   db       : PostgreSQL 16 官方镜像（独立数据库服务，数据卷持久化）
+# ============================================================
+
+services:
+  db:
+    image: hub.rat.dev/library/postgres:16-alpine
+    container_name: academy-db
+    environment:
+      POSTGRES_USER: academy
+      POSTGRES_PASSWORD: academy_pass
+      POSTGRES_DB: academy
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U academy"]
+      interval: 5s
+      timeout: 3s
+      retries: 15
+    restart: unless-stopped
+
+  backend:
+    build:
+      context: .
+      dockerfile: docker/backend/Dockerfile
+    container_name: academy-backend
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      PGHOST: db
+      PGPORT: "5432"
+      PGUSER: academy
+      PGPASSWORD: academy_pass
+      PGDATABASE: academy
+      UPLOAD_DIR: /app/static/uploads
+      FLASK_DEBUG: "0"
+    volumes:
+      - uploads-data:/app/static/uploads
+    expose:
+      - "5000"
+    restart: unless-stopped
+
+  frontend:
+    build:
+      context: .
+      dockerfile: docker/frontend/Dockerfile
+    container_name: academy-frontend
+    depends_on:
+      - backend
+    ports:
+      - "8080:80"
+    restart: unless-stopped
+
+volumes:
+  pgdata:
+  uploads-data:

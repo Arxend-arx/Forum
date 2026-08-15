@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-theme="dark">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Academy · Prototype A — LLM 设置</title>
+<link rel="stylesheet" href="prototype-a.css">
+</head>
+<body>
+<div class="layout">
+
+  <aside class="sidebar">
+    <a class="brand" href="prototype-a.html"><span class="logo">A</span><span class="name" data-i18n="brand">Academy</span></a>
+    <nav class="nav" id="nav"></nav>
+    <div id="sideBottom"></div>
+  </aside>
+
+  <main class="main">
+    <div class="page-head">
+      <div>
+        <h1 data-i18n="llmTitle">大模型 API 配置</h1>
+        <div class="sub" data-i18n="llmSub">OpenAI 兼容格式，用于学术匹配分析</div>
+      </div>
+      <div class="actions">
+        <span class="status ok" id="cfgStatus"><span class="dot"></span> <span data-i18n="keyMasked">已配置（已脱敏）</span></span>
+      </div>
+    </div>
+
+    <form class="card form" onsubmit="event.preventDefault();toast('success', t('cfgSaved'))">
+      <div class="form-group">
+        <label data-i18n="baseUrl">Base URL</label>
+        <input class="input" value="https://api.openai.com/v1" data-i18n-ph="baseUrlPh" placeholder="如 https://api.openai.com/v1">
+      </div>
+      <div class="form-group">
+        <label data-i18n="apiKey">API Key</label>
+        <input class="input" type="password" value="sk-••••••••••••••••" placeholder="sk-…">
+        <span class="hint" data-i18n="keyMasked">已配置（已脱敏）</span>
+      </div>
+      <div class="form-group">
+        <label data-i18n="model">模型名称</label>
+        <input class="input" value="gpt-4o-mini" data-i18n-ph="modelPh" placeholder="如 gpt-4o-mini">
+      </div>
+
+      <div class="row" style="justify-content:flex-end;gap:10px">
+        <button class="btn btn-ghost" type="button" onclick="var b=this;b.textContent=t('testing');setTimeout(()=>{b.textContent=t('testConn');toast('success',t('testSuccess'))},800)" data-i18n="testConn">测试连接</button>
+        <button class="btn btn-primary" type="submit" data-i18n="saveCfg">保存配置</button>
+      </div>
+    </form>
+
+    <div class="card mt-3" style="background:var(--surface-2)">
+      <div class="card-title">ℹ️</div>
+      <p class="muted" style="font-size:13px" data-i18n="matchSub">基于智慧芽 MCP 检索专利与文献，并可调用大模型分析匹配度</p>
+    </div>
+  </main>
+</div>
+
+<script src="prototype-a-common.js"></script>
+<script>
+renderNav('match');
+</script>
+</body>
+</html>

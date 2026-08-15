@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-theme="dark">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Academy · Prototype A — 检索历史</title>
+<link rel="stylesheet" href="prototype-a.css">
+</head>
+<body>
+<div class="layout">
+
+  <aside class="sidebar">
+    <a class="brand" href="prototype-a.html"><span class="logo">A</span><span class="name" data-i18n="brand">Academy</span></a>
+    <nav class="nav" id="nav"></nav>
+    <div id="sideBottom"></div>
+  </aside>
+
+  <main class="main">
+    <div class="page-head">
+      <div>
+        <h1 data-i18n="matchHistory">检索历史</h1>
+        <div class="sub">@ 星野原</div>
+      </div>
+      <div class="actions">
+        <a class="btn btn-primary btn-sm" href="prototype-a-match.html">+ <span data-i18n="runSearch">开始检索</span></a>
+      </div>
+    </div>
+
+    <div class="card table-wrap" style="padding:8px 6px">
+      <table class="table">
+        <thead><tr><th data-i18n="keyword">关键词</th><th data-i18n="resultCount">结果数</th><th data-i18n="time">时间</th><th></th></tr></thead>
+        <tbody id="rows"></tbody>
+      </table>
+    </div>
+  </main>
+</div>
+
+<script src="prototype-a-common.js"></script>
+<script>
+const ROWS = [
+  {k:"Transformer 注意力机制", n:10, t:"2026-08-07 10:02"},
+  {k:"RAG 检索增强生成", n:8, t:"2026-08-05 15:41"},
+  {k:"图神经网络 推荐系统", n:12, t:"2026-08-01 09:20"},
+  {k:"知识蒸馏 模型压缩", n:6, t:"2026-07-28 22:13"}
+];
+function render(){
+  document.getElementById('rows').innerHTML = ROWS.map(r=>`
+    <tr>
+      <td><span style="font-weight:600">${r.k}</span></td>
+      <td><span class="tag">${r.n}</span></td>
+      <td class="muted">${r.t}</td>
+      <td style="text-align:right"><a class="btn btn-ghost btn-sm" href="prototype-a-match-result.html" data-i18n="view">查看</a></td>
+    </tr>`).join('');
+}
+document.addEventListener('langchange', render);
+renderNav('match');
+render();
+</script>
+</body>
+</html>
