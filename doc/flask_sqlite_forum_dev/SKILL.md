@@ -1,149 +1,180 @@
 ---
-name: flask_sqlite_forum_dev
-description: 基于Python Flask + 原生SQLite3 从零搭建单文件轻量化本地论坛，包含用户、帖子、评论完整业务闭环，自带权限控制、模板渲染、数据持久化，满足教学/本地小型社区基础需求
+name: academic_forum_dev
+description: 基于 React + Vite 前端、Flask REST API 后端、PostgreSQL 16 数据库的 AcademicForumLite 论坛开发技能，采用 Docker 三容器（frontend/backend/db）架构部署，包含用户、帖子、评论、关注、好友、私信（SSE）、学术匹配（OpenAlex 文献）完整业务闭环
 ---
 
 # 技能元信息
-skill_id: flask_sqlite_forum_dev
-skill_name: 轻量化本地论坛Web系统构建技能
+skill_id: academic_forum_dev
+skill_name: 学术论坛全栈开发技能（前后端分离 + Docker 三容器）
 skill_version: 1.0.0
 author: FullStack Python Dev
-create_time: 2026-07-29
-description: 基于Python Flask + 原生SQLite3 从零搭建单文件轻量化本地论坛，包含用户、帖子、评论完整业务闭环，自带权限控制、模板渲染、数据持久化，满足教学/本地小型社区基础需求
+create_time: 2026-08-15
+description: 基于 React + Vite 前端、Flask REST API 后端、PostgreSQL 16 数据库的 AcademicForumLite 论坛开发技能，采用 Docker 三容器（frontend/backend/db）架构部署，包含用户、帖子、评论、关注、好友、私信（SSE）、学术匹配（OpenAlex 文献）完整业务闭环
 tags:
-  - python
+  - react
+  - vite
   - flask
-  - sqlite3
-  - web论坛
-  - 全栈简易项目
-  - jinja2模板
-  - 本地数据库
+  - postgresql
+  - docker
+  - 前后端分离
+  - 学术论坛
+  - sse实时聊天
 compatible_env:
-  python_version: ">=3.8"
+  python_version: ">=3.10"
+  node_version: ">=18"
   os_support: [Windows, Linux, MacOS]
 dependencies:
   pip:
-    - flask==2.3.3
+    - flask
+    - psycopg2-binary
+    - requests
+  npm:
+    - react
+    - react-dom
+    - react-router-dom
+    - react-i18next
+    - i18next
+    - katex
+    - vite
 
 # 技能核心约束规范
 constraint_rules:
-  db_limit:
-    only_sqlite3: true
-    forbid_orm: [sqlalchemy, peewee]
-    forbid_external_db: [mysql, postgres, redis]
+  architecture:
+    front_back_separated: true # 前后端分离：Flask 仅提供 /api/* REST JSON，前端为独立 React 工程
+    three_container: true      # Docker 三容器：frontend(Nginx SPA) / backend(Flask API) / db(PostgreSQL 16)
+    db_service: postgresql     # 数据库为独立容器服务，非文件数据库
   code_spec:
-    backend_single_file: true # 后端仅app.py单文件
-    template_dir: templates/ # 固定模板目录
-    use_jinja2_extend: true # 必须使用base.html模板继承
-    no_front_framework: true # 禁止Vue/React/Angular
+    backend_api_only: true     # 后端不渲染 HTML 模板（render_template 禁用）
+    frontend_dir: frontend/    # React 源码目录
+    use_orm: false             # 不使用 ORM，原生 SQL 参数化（psycopg2）
   security_base:
-    session_login: true # 使用session存储登录态
-    unlogin_intercept: true # 未登录拦截写操作
-    owner_only_delete: true # 仅创作者可删帖/删评
-    form_empty_check: true # 所有表单非空校验
+    session_login: true        # Flask 签名 Cookie Session 存储登录态
+    unlogin_intercept: true    # 未登录拦截写操作
+    owner_only_delete: true    # 仅创作者可删帖/删评
+    form_empty_check: true     # 所有表单非空校验
   data_spec:
-    auto_init_table: true # 程序启动自动建库建表
-    three_fixed_table: [user, post, comment]
-    cascade_delete: true # 删除帖子同步删除关联评论
+    auto_init_table: true      # 后端启动 init_db() 幂等建表 + ADD COLUMN 兼容迁移
+    cascade_delete: true       # 删除帖子同步删除关联评论（ON DELETE CASCADE）
 
-# 数据库表规范（强制标准）
+# 数据库表规范（PostgreSQL 语法）
 database_schema:
   table_user:
     fields:
-      id: INTEGER PRIMARY KEY AUTOINCREMENT
+      id: SERIAL PRIMARY KEY
       username: TEXT NOT NULL UNIQUE
       password: TEXT NOT NULL
       create_time: TEXT NOT NULL
-    index: username(唯一索引)
+    extra_columns: [avatar, bio, learning_interest, last_active] # 兼容迁移列
   table_post:
     fields:
-      id: INTEGER PRIMARY KEY AUTOINCREMENT
-      user_id: INTEGER NOT NULL
+      id: SERIAL PRIMARY KEY
+      user_id: INTEGER NOT NULL REFERENCES "user"(id)
       title: TEXT NOT NULL
       content: TEXT NOT NULL
       create_time: TEXT NOT NULL
       update_time: TEXT NOT NULL
-    foreign_key: user_id -> user.id
+    extra_columns: [tags] # #标签 逗号分隔
   table_comment:
     fields:
-      id: INTEGER PRIMARY KEY AUTOINCREMENT
-      post_id: INTEGER NOT NULL
-      user_id: INTEGER NOT NULL
+      id: SERIAL PRIMARY KEY
+      post_id: INTEGER NOT NULL REFERENCES post(id) ON DELETE CASCADE
+      user_id: INTEGER NOT NULL REFERENCES "user"(id)
       content: TEXT NOT NULL
       create_time: TEXT NOT NULL
-    foreign_key:
-      post_id -> post.id
-      user_id -> user.id
+  table_follow:        # 关注关系
+  table_user_llm_config: # 用户自配 LLM（base_url/api_key/model）
+  table_academic_search: # 学术匹配检索记录
+  table_message:         # 私信(private)/系统通知(system)
+  table_friend:          # 好友关系
+  table_friend_request:  # 好友请求(pending/accepted/rejected)
 
 # 强制业务功能清单（技能必须完整实现）
 must_have_function:
   user_module:
-    - 用户注册：用户名唯一校验、非空校验
-    - 用户登录：账号密码匹配、session写入登录信息
-    - 退出登录：清空session、跳转首页
-    - 登录拦截：未登录禁止发帖/评论/删除操作
+    - 注册：用户名唯一校验、非空校验
+    - 登录：账号密码匹配、session 写入登录态
+    - 退出登录：清空 session
+    - 登录拦截：未登录禁止发帖/评论/私信等写操作
+    - 在线状态：last_active 心跳刷新，2 分钟内有活跃视为在线
   post_module:
-    - 首页帖子列表：时间倒序展示、展示作者+时间
-    - 发布帖子：标题内容双必填校验
-    - 帖子详情页：展示完整正文、关联评论
-    - 删除帖子：仅本人可删，级联删除所有评论
+    - 帖子列表：最新/最热排序、#标签分类筛选
+    - 发布帖子：Markdown 正文（KaTeX 公式、GFM 表格）、提取 #标签 写入 tags
+    - 帖子详情：Markdown 渲染 + 评论列表
+    - 删除帖子：仅作者可删，级联删除评论
   comment_module:
-    - 帖子下新增评论：内容非空校验
-    - 展示全部评论：按发布时间正序
-    - 删除评论：仅评论发布者可删除
+    - 帖子下新增评论：Markdown 编辑器（含表情选择器、图片上传）
+    - 删除评论：仅评论作者可删
+  social_module:
+    - 关注 / 取消关注
+    - 好友请求 → 接受/拒绝 → 建立好友关系
+    - 私信聊天（仅好友间），SSE 服务端实时推送
+    - 系统通知（@提及、好友请求），未读徽标
+  search_module:
+    - 关键词搜索（帖子标题/正文 + 用户）
+  academic_match_module:
+    - OpenAlex 免费文献检索（无需 Key）
+    - 用户自配 OpenAI 兼容 LLM 生成匹配分析
+    - 检索历史持久化
   ui_base:
-    - 公共基模板base.html：统一导航、消息提示flash弹窗
-    - 内置原生CSS，无需外部样式库
-    - 所有删除操作增加前端confirm二次确认弹窗
+    - 中英双语 i18n（react-i18next）
+    - 浅色/深色主题（CSS Variables）
+    - 统一设计令牌、加载态/空态/Toast/确认弹窗
 
 # 项目目录标准结构（技能输出必须遵循）
 standard_dir_tree: |
 forum_project/
-├── app.py               # 后端主程序（单文件）
-├── forum.db             # SQLite数据库文件（运行自动生成）
-└── templates/           # Jinja2模板目录
-    ├── base.html        # 全局公共布局父模板
-    ├── index.html       # 论坛首页帖子列表
-    ├── login.html       # 用户登录页面
-    ├── register.html    # 用户注册页面
-    ├── create_post.html # 发帖页面
-    └── post_detail.html# 帖子详情+评论页面
+├── docker-compose.yml        # 三容器编排（frontend:8080 / backend:5000 / db:5432）
+├── app.py                    # Flask REST API 后端（唯一入口，含 init_db）
+├── academic_match.py         # OpenAlex 文献检索 + LLM 分析 + save_search
+├── config.json               # 运行时配置（OpenAlex 免费源，无需密钥）
+├── requirements.txt
+├── docker/
+│   ├── backend/Dockerfile
+│   └── frontend/             # Nginx SPA + /api /uploads 反代 + SSE 关缓冲
+│       ├── Dockerfile
+│       └── nginx.conf
+├── frontend/                 # React + Vite 工程
+│   ├── vite.config.js        # dev 代理 /api
+│   └── src/
+│       ├── App.jsx           # 路由 + 全局 Provider
+│       ├── main.jsx
+│       ├── api/client.js     # fetch 封装（携带凭据、统一错误）
+│       ├── i18n/             # react-i18next 配置 + zh/en
+│       ├── context/          # AppContext（当前用户/语言/主题）
+│       ├── components/       # Layout、Markdown、MarkdownEditor、PostCard、TagChips、EmojiPicker...
+│       ├── pages/            # Home/CreatePost/PostDetail/Profile/Search/Chat/Messages/Friends/Match...
+│       └── styles/theme.css  # 设计令牌 + 深浅主题
+├── static/uploads/           # 上传图片（挂载上传卷）
+└── scripts/                  # 工具脚本（如 migrate_sqlite_to_pg.py）
 
 # 技能输出规范
 output_format:
   step_1: 输出标准目录树
-  step_2: 输出完整可运行app.py带详细注释
-  step_3: 分文件输出templates下全部HTML源码
-  step_4: 输出依赖安装、启动运行命令
-  step_5: 输出功能测试验证步骤
+  step_2: 输出后端 app.py（REST API + init_db）+ academic_match.py
+  step_3: 输出前端 React 工程（页面/组件/路由/i18n/主题）
+  step_4: 输出 docker-compose.yml 与 Dockerfile/nginx.conf
+  step_5: 输出依赖安装、构建、启动、验证步骤
 
 # 技能扩展可选功能（按需追加，不破坏基础规范）
 optional_extension:
   security_enhance:
-    - 密码MD5加密存储
-    - XSS内容转义防注入
-    - CSRF表单防护
-    - 登录session超时失效
+    - 密码哈希存储（werkzeug.security / bcrypt）
+    - XSS 内容转义
+    - CSRF 防护
   business_extend:
-    - 帖子分页
-    - 标题全文搜索
-    - 帖子编辑功能
-    - 评论分页
-  ui_extend:
-    - Bootstrap5美化页面
-    - 帖子点赞功能
-    - 帖子分类标签
-  advanced:
-    - Markdown渲染正文
-    - 图片上传存储
-    - 管理员后台权限
-    - 本地运行日志记录
+    - 帖子点赞/收藏
+    - 帖子编辑
+    - 分页/惰性加载
+  deploy_enhance:
+    - 远程服务器增量部署（dist/源码增量更新）
+    - 数据库备份恢复（pg_dump）
+    - HTTPS/域名
 
 # 技能调用提示词（配套使用prompt）
 skill_prompt: |
-调用【flask_sqlite_forum_dev】技能，严格遵循skill文件规范，完成轻量化Python论坛系统开发，要求：
-1. 完全遵守数据库三表结构、目录结构、代码约束规则
-2. 完整实现所有must_have_function强制基础功能，不可缺失
-3. 默认不加载optional_extension扩展功能，如需扩展手动指定
-4. 输出严格按照output_format五步标准格式返回完整可运行代码
-5. 仅使用Python内置sqlite3与Flask，禁止引入任何ORM、外部数据库服务
+调用【academic_forum_dev】技能，严格遵循skill文件规范，开发或维护 AcademicForumLite 学术论坛系统，要求：
+1. 完全遵守前后端分离、三容器 Docker、PostgreSQL 架构约束
+2. 后端仅提供 /api/* REST JSON，不渲染模板；原生 SQL 参数化
+3. 完整实现 must_have_function 强制基础功能，不可缺失
+4. 前端遵循 frontend/ 目录结构，支持 i18n 与深浅主题
+5. 输出严格按照 output_format 五步标准格式返回完整可运行代码
