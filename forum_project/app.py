@@ -4,7 +4,7 @@ AcademicForumLite - Flask REST API 后端（前后端分离版 · PostgreSQL）
 - 数据库: PostgreSQL（默认库 academy，连接参数经环境变量 PGHOST/PGPORT/PGUSER/PGPASSWORD/PGDATABASE 配置）
 - 认证: Flask 签名 Cookie Session（同源部署；开发期由 Vite 代理 /api）
 - 响应: 统一 { ok: bool, data? / error? code? }
-- 学术匹配: 复用 academic_match.py（智慧芽 MCP + 用户自配 LLM）
+- 学术匹配: 复用 academic_match.py（OpenAlex 文献检索 + 用户自配 LLM）
 """
 
 import json
@@ -220,6 +220,37 @@ def init_db():
         "ALTER TABLE academic_search ADD COLUMN IF NOT EXISTS "
         "results_json TEXT NOT NULL DEFAULT ''"
     )
+    # 第二轮升级：国籍 / 角色
+    cur.execute(
+        'ALTER TABLE "user" ADD COLUMN IF NOT EXISTS nationality TEXT NOT NULL DEFAULT \'\''
+    )
+    cur.execute(
+        'ALTER TABLE "user" ADD COLUMN IF NOT EXISTS role TEXT NOT NULL DEFAULT \'user\''
+    )
+    # 公告表
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS announcement (
+            id          SERIAL PRIMARY KEY,
+            user_id     INTEGER NOT NULL REFERENCES "user"(id),
+            title       TEXT    NOT NULL,
+            content     TEXT    NOT NULL,
+            create_time TEXT    NOT NULL
+        )
+    """)
+    # 兼容迁移：为旧公告表补发布者列（可空；旧行无发布者记录，留 NULL 表示系统发布。
+    # 注意不能加 NOT NULL DEFAULT 0 + 外键——会为旧行填充 0 并立即校验外键而失败）
+    cur.execute(
+        'ALTER TABLE announcement ADD COLUMN IF NOT EXISTS '
+        'user_id INTEGER REFERENCES "user"(id)'
+    )
+    # 种子管理员账号（密码可用环境变量 ADMIN_PASSWORD 覆盖，默认 admin123）
+    admin_pwd = os.environ.get("ADMIN_PASSWORD", "admin123")
+    cur.execute(
+        """INSERT INTO "user" (username, password, create_time, role)
+           SELECT %s, %s, %s, 'admin'
+           WHERE NOT EXISTS (SELECT 1 FROM "user" WHERE username = %s)""",
+        ("admin", admin_pwd, now(), "admin"),
+    )
     db.commit()
     cur.close()
     db.close()
@@ -233,6 +264,26 @@ def login_required(f):
     def decorated(*args, **kwargs):
         if "user_id" not in session:
             return fail("请先登录", 401)
+        return f(*args, **kwargs)
+    return decorated
+
+
+def _is_admin(db) -> bool:
+    """当前登录用户是否为管理员（角色 role='admin'）"""
+    uid = session.get("user_id")
+    if not uid:
+        return False
+    row = db.execute('SELECT role FROM "user" WHERE id = %s', (uid,)).fetchone()
+    return bool(row and row["role"] == "admin")
+
+
+def admin_required(f):
+    @wraps(f)
+    def decorated(*args, **kwargs):
+        if "user_id" not in session:
+            return fail("请先登录", 401)
+        if not _is_admin(get_db()):
+            return fail("需要管理员权限", 403)
         return f(*args, **kwargs)
     return decorated
 
@@ -305,7 +356,7 @@ def api_me():
 def _user_payload(db, user_id):
     """当前用户信息（含未读数），供登录/me/导航徽标使用"""
     u = db.execute(
-        "SELECT id, username, avatar, bio, learning_interest, create_time "
+        "SELECT id, username, avatar, bio, learning_interest, nationality, role, create_time "
         "FROM \"user\" WHERE id = %s", (user_id,)).fetchone()
     if u is None:
         return None
@@ -414,7 +465,7 @@ def api_delete_post(post_id):
     post = db.execute("SELECT * FROM post WHERE id = %s", (post_id,)).fetchone()
     if post is None:
         return fail("帖子不存在", 404)
-    if post["user_id"] != _current_user_id():
+    if post["user_id"] != _current_user_id() and not _is_admin(db):
         return fail("只能删除自己的帖子", 403)
     db.execute("DELETE FROM post WHERE id = %s", (post_id,))
     db.commit()
@@ -517,7 +568,7 @@ def api_search():
 def api_user_profile(user_id):
     db = get_db()
     user = db.execute(
-        "SELECT id, username, avatar, bio, learning_interest, create_time, "
+        "SELECT id, username, avatar, bio, learning_interest, nationality, role, create_time, "
         "(last_active IS NOT NULL AND last_active > now() - interval '2 minutes') AS is_online "
         "FROM \"user\" WHERE id = %s", (user_id,)).fetchone()
     if user is None:
@@ -564,13 +615,27 @@ def api_user_profile(user_id):
 @login_required
 def api_edit_profile():
     data = request.get_json(silent=True) or request.form
+    username = (data.get("username") or "").strip()
+    nationality = (data.get("nationality") or "").strip()
     avatar = (data.get("avatar") or "").strip()
     bio = (data.get("bio") or "").strip()
     learning_interest = (data.get("learning_interest") or "").strip()
     db = get_db()
+    # 修改用户名（唯一性校验；留空则不改）
+    if username:
+        if len(username) < 2 or len(username) > 20:
+            return fail("用户名长度需为 2-20 个字符")
+        dup = db.execute(
+            'SELECT id FROM "user" WHERE username = %s AND id <> %s',
+            (username, _current_user_id())).fetchone()
+        if dup:
+            return fail("用户名已存在，请更换")
+        session["username"] = username
     db.execute(
-        "UPDATE \"user\" SET avatar = %s, bio = %s, learning_interest = %s WHERE id = %s",
-        (avatar, bio, learning_interest, _current_user_id()))
+        'UPDATE "user" SET username = COALESCE(NULLIF(%s, \'\'), username), '
+        "nationality = %s, avatar = %s, bio = %s, learning_interest = %s "
+        "WHERE id = %s",
+        (username, nationality, avatar, bio, learning_interest, _current_user_id()))
     db.commit()
     return ok()
 
@@ -1116,6 +1181,114 @@ def api_llm_test():
         return ok({"reply": (reply or "")[:200]})
     except RuntimeError as exc:
         return fail(f"连接失败: {exc}", 502)
+
+
+# ---------------------------------------------------------------------------
+# 账号注销
+# ---------------------------------------------------------------------------
+@app.route("/api/auth/delete", methods=["POST"])
+@login_required
+def api_delete_account():
+    """注销当前账号：级联删除其全部关联数据后删除用户，并清除会话"""
+    uid = _current_user_id()
+    db = get_db()
+    db.execute("DELETE FROM comment WHERE user_id = %s", (uid,))
+    db.execute("DELETE FROM post WHERE user_id = %s", (uid,))
+    db.execute("DELETE FROM follow WHERE follower_id = %s OR followed_id = %s", (uid, uid))
+    db.execute("DELETE FROM message WHERE sender_id = %s OR receiver_id = %s", (uid, uid))
+    db.execute("DELETE FROM friend WHERE user_id = %s OR friend_id = %s", (uid, uid))
+    db.execute("DELETE FROM friend_request WHERE from_id = %s OR to_id = %s", (uid, uid))
+    db.execute("DELETE FROM user_llm_config WHERE user_id = %s", (uid,))
+    db.execute("DELETE FROM academic_search WHERE user_id = %s", (uid,))
+    db.execute('DELETE FROM "user" WHERE id = %s', (uid,))
+    db.commit()
+    session.clear()
+    return ok()
+
+
+# ---------------------------------------------------------------------------
+# 公告（管理员发布，全站可见）
+# ---------------------------------------------------------------------------
+@app.route("/api/announcements")
+def api_announcements():
+    """公告列表（公开，按时间倒序，最多 20 条，含发布者信息）"""
+    db = get_db()
+    rows = db.execute("""
+        SELECT a.*, u.username AS publisher_username, u.avatar AS publisher_avatar,
+               u.role AS publisher_role
+        FROM announcement a
+        LEFT JOIN "user" u ON a.user_id = u.id
+        ORDER BY a.create_time DESC, a.id DESC LIMIT 20
+    """).fetchall()
+    return ok([dict(r) for r in rows])
+
+
+@app.route("/api/announcements", methods=["POST"])
+@admin_required
+def api_create_announcement():
+    data = request.get_json(silent=True) or request.form
+    title = (data.get("title") or "").strip()
+    content = (data.get("content") or "").strip()
+    if not title or not content:
+        return fail("公告标题和内容不能为空")
+    db = get_db()
+    cur = db.execute(
+        "INSERT INTO announcement (user_id, title, content, create_time) "
+        "VALUES (%s, %s, %s, %s) RETURNING id",
+        (_current_user_id(), title, content, now()))
+    db.commit()
+    return ok({"id": cur.fetchone()["id"]}), 201
+
+
+@app.route("/api/announcements/<int:aid>", methods=["DELETE"])
+@admin_required
+def api_delete_announcement(aid):
+    db = get_db()
+    db.execute("DELETE FROM announcement WHERE id = %s", (aid,))
+    db.commit()
+    return ok()
+
+
+# ---------------------------------------------------------------------------
+# 管理后台（管理员）
+# ---------------------------------------------------------------------------
+@app.route("/api/admin/users")
+@admin_required
+def api_admin_users():
+    """用户列表（管理员用，可按用户名搜索）"""
+    q = (request.args.get("q") or "").strip()
+    db = get_db()
+    if q:
+        rows = db.execute(
+            'SELECT id, username, avatar, role, create_time FROM "user" '
+            "WHERE username LIKE %s ORDER BY id LIMIT 50",
+            (f"%{q}%",)).fetchall()
+    else:
+        rows = db.execute(
+            'SELECT id, username, avatar, role, create_time FROM "user" '
+            "ORDER BY id LIMIT 100").fetchall()
+    return ok([dict(r) for r in rows])
+
+
+@app.route("/api/admin/users/<int:target_id>/role", methods=["POST"])
+@admin_required
+def api_set_user_role(target_id):
+    """设置/取消管理员角色（不能修改自己的角色）"""
+    data = request.get_json(silent=True) or request.form
+    role = (data.get("role") or "").strip()
+    if role not in ("admin", "user"):
+        return fail("无效角色")
+    if target_id == _current_user_id():
+        return fail("不能修改自己的角色")
+    db = get_db()
+    target = db.execute('SELECT id FROM "user" WHERE id = %s', (target_id,)).fetchone()
+    if target is None:
+        return fail("用户不存在", 404)
+    db.execute('UPDATE "user" SET role = %s WHERE id = %s', (role, target_id))
+    db.commit()
+    # 实时推送角色变更，目标用户在线时前端立即刷新（无需等待轮询）
+    _sse_notify(target_id, {"type": "role_changed", "role": role})
+    return ok()
 
 
 # ---------------------------------------------------------------------------

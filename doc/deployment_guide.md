@@ -1,202 +1,502 @@
-# 论坛系统部署文档（Docker 三容器架构）
+# 轻量论坛系统部署文档
 
 ## 1. 文档目的
 
-本文档用于指导 AcademicForumLite（前后端分离版）的本地部署、启动、验证与维护。当前项目采用 **Docker Compose 三容器架构**：
+本文档用于指导轻量论坛系统在本地环境中的安装、启动、验证与日常维护。当前项目基于：
 
-- `frontend`：Nginx 托管 React SPA（对外 **8080**），反向代理 `/api` 与 `/uploads` 到后端
-- `backend`：Flask REST API（内部 **5000**），连接 PostgreSQL
-- `db`：PostgreSQL 16 独立数据库服务（官方镜像，数据卷持久化）
+- Python
+- Flask
+- SQLite3
+
+系统定位为本地轻量论坛，适合教学演示、功能验证与小规模个人使用。
 
 ## 2. 部署范围
 
 当前文档覆盖以下内容：
 
-- 运行环境准备（Docker Engine + Compose）
+- 运行环境准备
 - 项目目录说明
-- 一键启动（docker compose）
+- 依赖安装
+- conda 环境部署
+- 启动方式
+- 后台运行方式
 - 数据库初始化机制
-- 本地开发模式（不使用 Docker）
 - 功能验证步骤
 - 常见问题处理
-- 远程部署指引
 
-> 远程服务器部署（含增量更新、数据备份/恢复、SELinux/seccomp 等生产环境细节）详见 [`远程服务更新手册.md`](./远程服务更新手册.md)。
+当前版本不包含：
+
+- Docker 部署
+- Nginx 反向代理
+- 生产级 WSGI 服务部署
+- 外部数据库部署
 
 ## 3. 运行环境要求
 
 | 项目 | 要求 |
 | --- | --- |
-| 操作系统 | Windows / Linux / macOS（Docker Desktop 或 Docker Engine） |
-| Docker | Docker Engine ≥ 20.10，含 Compose v2（`docker compose`） |
-| 内存 | 建议 ≥ 2GB（三容器运行） |
-| 网络 | 首次构建需可拉取基础镜像（`node:20-alpine`、`python:3.12-slim`、`postgres:16-alpine`），如受限可改用国内加速源 |
+| 操作系统 | Windows / Linux / macOS |
+| Python 版本 | 3.8 及以上 |
+| 依赖库 | `flask==2.3.3` |
+| 数据库 | SQLite，本地文件方式 |
+| 网络要求 | 本地访问即可 |
 
 ## 4. 项目目录说明
 
+建议目录结构如下：
+
 ```text
 forum_project/
-├── docker-compose.yml        # 三容器编排
-├── app.py                    # Flask REST API 后端
-├── academic_match.py         # OpenAlex 文献检索 + LLM 分析
-├── requirements.txt
-├── config.json               # 运行时配置（OpenAlex 免费源，无需密钥）
-├── docker/
-│   ├── backend/Dockerfile    # 后端镜像
-│   └── frontend/             # 前端镜像（Nginx + SPA）
-│       ├── Dockerfile
-│       └── nginx.conf        # SPA 托管 + /api /uploads 反代 + SSE 关闭缓冲
-├── frontend/                 # React + Vite 前端工程（源码）
-├── static/uploads/           # 上传图片目录（挂载为上传卷）
-├── scripts/                  # 工具脚本（如 SQLite→PG 迁移）
-└── deploy/                   # 部署辅助脚本
+├── app.py
+├── forum.db
+├── database_design.md
+├── deployment_guide.md
+└── templates/
+    ├── base.html
+    ├── index.html
+    ├── login.html
+    ├── register.html
+    ├── create_post.html
+    └── post_detail.html
 ```
 
-## 5. 一键启动（Docker）
+说明：
 
-### 5.1 构建并启动
+- `app.py`：后端主程序，负责路由、数据库初始化、业务逻辑处理
+- `forum.db`：SQLite 数据库文件，首次运行自动生成
+- `templates/`：Jinja2 模板目录
+- `database_design.md`：数据库设计文档
+- `deployment_guide.md`：当前部署文档
 
-在 `forum_project/` 目录执行：
+## 5. 部署前准备
+
+### 5.1 检查 Python
+
+执行以下命令确认 Python 已安装：
 
 ```bash
-docker compose up -d --build
+python --version
 ```
 
-### 5.2 访问
+如果输出版本号且版本不低于 3.8，则环境满足要求。
 
-浏览器打开：
-
-```text
-http://localhost:8080
-```
-
-### 5.3 服务与端口
-
-| 服务 | 容器名 | 对外端口 | 说明 |
-| --- | --- | --- | --- |
-| frontend | `academy-frontend` | 8080 → 容器 80 | Nginx 托管 SPA + 反代 |
-| backend | `academy-backend` | 内部 5000（不对外） | Flask API |
-| db | `academy-db` | 内部 5432（不对外） | PostgreSQL 16 |
-
-### 5.4 常用命令
+### 5.2 进入项目目录
 
 ```bash
-docker compose ps                 # 查看三容器状态
-docker compose logs -f backend    # 查看后端日志
-docker compose down               # 停止（保留数据卷）
-docker compose down -v            # 停止并删除数据卷（会清空数据！）
-docker compose up -d --build      # 代码变更后重建
+cd d:\research\forum\forum_project
 ```
 
-## 6. 数据库初始化机制
+Windows PowerShell 也可直接在该目录打开终端执行。
 
-后端启动时自动执行 `init_db()`（幂等，重复执行安全）：
+## 6. 安装依赖
 
-1. 逐条执行 `CREATE TABLE IF NOT EXISTS` 创建 9 张业务表（user / post / comment / follow / user_llm_config / academic_search / message / friend / friend_request）。
-2. 对已有表执行 `ALTER TABLE ... ADD COLUMN IF NOT EXISTS` 做兼容迁移（avatar / bio / learning_interest / last_active / tags / results_json）。
-3. 已存在的数据不会被覆盖。
-
-> PostgreSQL 不允许单条语句包含多个 DDL，`init_db()` 逐条执行。表结构详见 [`database_design.md`](./database_design.md)。
-
-## 7. 本地开发模式（不使用 Docker）
-
-### 7.1 后端
-
-需要本机可访问的 PostgreSQL 实例，通过环境变量配置：
-
-| 变量 | 用途 | 默认值 |
-| --- | --- | --- |
-| `PGHOST` | 数据库地址 | `localhost` |
-| `PGPORT` | 数据库端口 | `5432` |
-| `PGUSER` | 数据库用户 | `academy` |
-| `PGPASSWORD` | 数据库密码 | `academy` |
-| `PGDATABASE` | 数据库名 | `academy` |
-| `UPLOAD_DIR` | 上传目录（可选） | `static/uploads` |
+本项目仅依赖 Flask：
 
 ```bash
-cd forum_project
-pip install -r requirements.txt
+pip install flask==2.3.3
+```
+
+如果使用虚拟环境，建议先创建并激活虚拟环境后再安装：
+
+### Windows
+
+```bash
+python -m venv .venv
+.venv\Scripts\activate
+pip install flask==2.3.3
+```
+
+### Linux / macOS
+
+```bash
+python3 -m venv .venv
+source .venv/bin/activate
+pip install flask==2.3.3
+```
+
+### 6.1 conda 环境部署
+
+如果本机主要使用 Anaconda 或 Miniconda，推荐使用独立 conda 环境部署：
+
+#### 创建环境
+
+```bash
+conda create -n forum_env python=3.10 -y
+```
+
+#### 激活环境
+
+```bash
+conda activate forum_env
+```
+
+#### 安装依赖
+
+```bash
+pip install flask==2.3.3
+```
+
+#### 验证环境
+
+```bash
+python --version
+pip show flask
+```
+
+建议后续每次启动项目时，都先执行：
+
+```bash
+conda activate forum_env
+```
+
+## 7. 启动方式
+
+### 7.1 直接运行
+
+在项目根目录执行：
+
+```bash
 python app.py
 ```
 
-API 默认监听 5000 端口。
+默认启动后会看到类似输出：
 
-### 7.2 前端
-
-```bash
-cd forum_project/frontend
-npm install
-npm run dev          # Vite 开发服务器，代理 /api 到后端
+```text
+* Running on http://127.0.0.1:5000
 ```
 
-开发地址：`http://localhost:5173`。
+浏览器访问：
 
-## 8. 首次部署验证流程
+```text
+http://127.0.0.1:5000
+```
 
-启动完成后，建议按以下步骤验证：
+### 7.2 后台运行模式
 
-1. 打开 `http://localhost:8080`，确认首页可访问
-2. 注册一个测试账号并登录
-3. 发布一篇测试帖子（可包含 `#标签`、Markdown、数学公式 `$...$`）
-4. 进入帖子详情页发表评论
-5. 搜索关键词、按分类/排序筛选帖子
-6. 关注其他用户、发送好友请求并接受
-7. 好友间发送私信（验证 SSE 实时推送）
-8. 使用学术匹配检索（OpenAlex 文献）
-9. 上传头像/图片（本地文件选择）
-10. 切换中英文、深浅主题
-11. 未登录状态下验证发帖/评论被拦截
+如果希望关闭终端后程序仍保持运行，可以使用后台运行方式。
 
-## 9. 常见问题处理
+#### Windows PowerShell 后台运行
 
-### 9.1 端口占用
+在项目目录执行：
 
-| 现象 | 处理 |
-| --- | --- |
-| `8080` 被占用 | 修改 `docker-compose.yml` 中 frontend 的 `ports: "8080:80"` 为其他端口 |
-| `5000` 被占用（本地非 Docker 开发） | 更换后端启动端口 |
+```powershell
+Start-Process python -ArgumentList "app.py" -WorkingDirectory "d:\research\forum\forum_project"
+```
 
-### 9.2 构建拉取基础镜像超时
+如果希望同时写入日志：
 
-- 重试，或配置国内镜像加速源
-- 前端构建：`docker/frontend/Dockerfile` 已内置 npmmirror / 清华源，失败重试即可
+```powershell
+Start-Process powershell -ArgumentList "-NoExit", "-Command", "cd 'd:\research\forum\forum_project'; python app.py *> forum.log"
+```
 
-### 9.3 数据持久化
+说明：
 
-- 数据库数据在命名卷 `pgdata`，删除容器不丢数据
-- 上传文件在上传卷 `uploads-data`（backend 挂载 `static/uploads`）
-- `docker compose down -v` 会删除数据卷，请勿在生产环境使用
+- 第一种方式适合快速后台启动
+- 第二种方式适合保留运行日志
+- 如需结束进程，可在任务管理器中结束对应 `python.exe`
 
-### 9.4 后端连不上数据库
+#### Linux / macOS 后台运行
 
-- 检查 `docker compose ps` 中 `academy-db` 是否为 healthy（compose 中 backend 依赖 db 健康检查）
-- 检查数据库密码是否与 compose 中 `POSTGRES_PASSWORD` / `PGPASSWORD` 一致
+```bash
+nohup python app.py > forum.log 2>&1 &
+```
 
-### 9.5 上传/图片 404
+查看进程：
 
-- 确认请求路径经 Nginx 反代 `/uploads` → backend
-- 确认 backend 挂载了上传卷且 `UPLOAD_DIR` 指向卷内目录
+```bash
+ps -ef | grep app.py
+```
 
-## 10. 远程服务器部署
+停止进程：
 
-生产环境部署（`183.239.177.123:15000`）采用与本地相同的三容器架构，但受机房网络限制（无法稳定 `docker pull`、带宽仅几 KB/s），采用「本地构建 → 导出镜像/增量产物 → 上传 → load/增量重建」流程。
+```bash
+pkill -f "python app.py"
+```
 
-详见 [`远程服务更新手册.md`](./远程服务更新手册.md) 与 [`远程部署计划PRD.md`](./远程部署计划PRD.md)。
+说明：
 
-## 11. 安全说明
+- 日志会写入 `forum.log`
+- 关闭终端后服务仍可继续运行
 
-- 本版为教学/演示定位：密码明文存储、Flask 签名 Cookie Session，未启用 CSRF/限流
-- 生产部署建议：密码改哈希存储、启用 HTTPS、数据库密码更换、限制端口暴露
-- 用户自配 LLM Key 仅存于数据库 `user_llm_config`，前端不回显明文
+### 7.3 conda 环境下启动
 
-## 12. 文档维护建议
+如果使用 conda 环境，完整启动流程如下：
+
+```bash
+conda activate forum_env
+cd d:\research\forum\forum_project
+python app.py
+```
+
+如需 conda 环境下后台运行：
+
+#### Windows PowerShell
+
+```powershell
+conda activate forum_env
+Start-Process python -ArgumentList "app.py" -WorkingDirectory "d:\research\forum\forum_project"
+```
+
+#### Linux / macOS
+
+```bash
+conda activate forum_env
+cd /path/to/forum_project
+nohup python app.py > forum.log 2>&1 &
+```
+
+### 7.4 环境变量方式设置密钥
+
+虽然项目已提供默认 `SECRET_KEY`，但在实际部署时建议手动设置：
+
+#### Windows PowerShell
+
+```powershell
+$env:SECRET_KEY="your-own-secret-key"
+python app.py
+```
+
+#### Linux / macOS
+
+```bash
+export SECRET_KEY="your-own-secret-key"
+python app.py
+```
+
+## 8. 数据库初始化机制
+
+系统在应用启动时自动执行 `init_db()`，完成以下操作：
+
+1. 创建 `user` 表
+2. 创建 `post` 表
+3. 创建 `comment` 表
+4. 启用 SQLite 外键约束
+
+如果当前目录不存在 `forum.db`，系统会自动生成数据库文件。
+
+如果数据库文件已存在，则只会执行 `CREATE TABLE IF NOT EXISTS`，不会覆盖已有数据。
+
+## 9. 首次部署验证流程
+
+部署完成后，建议按以下步骤验证：
+
+1. 打开首页，确认页面可访问
+2. 注册一个测试账号
+3. 用测试账号登录
+4. 发布一篇测试帖子
+5. 进入帖子详情页并发表评论
+6. 删除评论
+7. 删除帖子
+8. 退出登录
+9. 未登录状态下验证发帖和评论会被拦截
+
+通过以上流程，可确认以下模块正常：
+
+- 用户模块
+- 帖子模块
+- 评论模块
+- Session 登录态
+- 权限控制
+- 级联删除
+
+## 10. 常见运维操作
+
+### 10.1 重置数据库
+
+如果是本地测试环境，需要清空历史数据，可删除数据库文件后重新启动：
+
+```bash
+del forum.db
+python app.py
+```
+
+Linux / macOS：
+
+```bash
+rm forum.db
+python app.py
+```
+
+说明：
+
+- 删除后原有用户、帖子、评论数据都会丢失
+- 重启应用后会自动重新建表
+
+### 10.2 修改监听地址
+
+当前 `app.py` 默认使用 Flask 开发服务器默认配置。如需局域网访问，可将启动部分改为：
+
+```python
+if __name__ == "__main__":
+    app.run(host="0.0.0.0", port=5000, debug=True)
+```
+
+仅建议在内网开发测试环境中使用。
+
+### 10.3 关闭调试模式
+
+如果希望减少调试信息暴露，可将：
+
+```python
+app.run(debug=True)
+```
+
+调整为：
+
+```python
+app.run(debug=False)
+```
+
+### 10.4 后台运行日志查看
+
+如果使用后台运行模式，建议定期查看日志文件：
+
+#### Windows PowerShell
+
+```powershell
+Get-Content .\forum.log -Wait
+```
+
+#### Linux / macOS
+
+```bash
+tail -f forum.log
+```
+
+### 10.5 conda 环境查看
+
+查看当前 conda 环境列表：
+
+```bash
+conda env list
+```
+
+删除测试用 conda 环境：
+
+```bash
+conda remove -n forum_env --all -y
+```
+
+## 11. 常见问题处理
+
+### 11.1 启动时报错 `No module named flask`
+
+原因：
+
+- Flask 未安装
+- 虚拟环境未激活
+
+处理方式：
+
+```bash
+pip install flask==2.3.3
+```
+
+### 11.2 页面能打开但样式异常
+
+原因：
+
+- 模板文件缺失
+- `templates/` 目录结构不正确
+
+处理方式：
+
+- 确认 `templates/` 与 `app.py` 在同级目录
+- 确认 6 个 HTML 模板文件完整存在
+
+### 11.3 删除帖子后评论未删除
+
+原因通常有两类：
+
+- SQLite 外键约束未开启
+- 数据库表结构不是应用当前版本自动初始化生成的
+
+处理方式：
+
+- 保证数据库连接执行 `PRAGMA foreign_keys = ON`
+- 删除旧 `forum.db` 后重启应用重新初始化
+
+### 11.4 数据库文件无法创建
+
+可能原因：
+
+- 当前目录无写权限
+- 路径错误
+
+处理方式：
+
+- 确认当前用户对 `forum_project/` 目录有写权限
+- 确认在正确目录启动 `app.py`
+
+### 11.5 conda 命令不可用
+
+可能原因：
+
+- 未安装 Conda
+- 当前终端未初始化 conda
+
+处理方式：
+
+- 确认已安装 Anaconda 或 Miniconda
+- 执行 `conda init powershell` 或对应 shell 初始化命令
+- 关闭并重新打开终端后再次执行 `conda activate forum_env`
+
+### 11.6 后台运行后无法访问页面
+
+可能原因：
+
+- 进程未真正启动
+- 启动目录不正确
+- 日志中有依赖或端口占用错误
+
+处理方式：
+
+- 查看 `forum.log`
+- 检查是否已有其他程序占用 5000 端口
+- 在前台执行一次 `python app.py`，先确认程序可正常启动
+
+## 12. 安全说明
+
+当前版本为基础教学部署版本，具有以下限制：
+
+- 使用 Flask 自带开发服务器，不适合高并发生产环境
+- 密码未加密存储
+- 未启用 CSRF 防护
+- 未启用 Session 超时控制
+
+因此建议使用场景为：
+
+- 本地学习
+- 课堂演示
+- 小范围功能验证
+
+不建议直接用于互联网公开生产环境。
+
+## 13. 发布检查清单
+
+部署前可按以下清单检查：
+
+- Python 版本符合要求
+- Flask 已安装
+- conda 环境已激活（如使用 conda）
+- 项目目录完整
+- `app.py` 可正常运行
+- 后台运行命令验证通过（如需长期运行）
+- `templates/` 文件完整
+- 首页可访问
+- 注册/登录正常
+- 发帖/评论正常
+- 删除权限正常
+- 级联删除正常
+
+## 14. 文档维护建议
 
 当项目发生以下变化时，应同步更新本部署文档：
 
-- 启动命令 / 端口变化
+- 启动命令变化
 - 依赖版本变化
-- 数据库表结构变化
+- 数据库结构变化
 - 新增环境变量
-- 部署方式变化
+- 新增部署方式
 
-这样可保证开发、测试、部署各阶段使用同一份准确文档。
+这样可以保证开发、测试、演示阶段使用同一份准确文档。

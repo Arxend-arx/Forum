@@ -27,6 +27,42 @@ export function AppProvider({ children }) {
       .finally(() => setAuthReady(true))
   }, [])
 
+  // 准实时刷新用户信息（角色/未读数等）：每 30s 一次 + 窗口聚焦时立即刷新，
+  // 保证"被授予管理员"等变更在合理时间内生效（无需手动刷新页面）
+  useEffect(() => {
+    if (!authReady) return
+    const refresh = () => {
+      api.get('/auth/me')
+        .then(setUser)
+        .catch(() => { /* 未登录 */ })
+    }
+    const id = setInterval(refresh, 30000)
+    window.addEventListener('focus', refresh)
+    return () => {
+      clearInterval(id)
+      window.removeEventListener('focus', refresh)
+    }
+  }, [authReady])
+
+  // 全局 SSE：管理员设置角色后服务端实时推送 role_changed，前端立即刷新用户信息
+  useEffect(() => {
+    if (!authReady || !user) return
+    if (typeof EventSource === 'undefined') return
+    let es
+    try {
+      es = new EventSource('/api/chat/stream')
+      es.onmessage = (ev) => {
+        try {
+          const d = JSON.parse(ev.data)
+          if (d && d.type === 'role_changed') {
+            api.get('/auth/me').then(setUser).catch(() => {})
+          }
+        } catch (e) { /* 忽略非 JSON/无关事件 */ }
+      }
+    } catch (e) { /* SSE 不可用时降级为轮询 */ }
+    return () => { if (es) es.close() }
+  }, [authReady, user && user.id])
+
   const toggleTheme = useCallback(() => setTheme((t) => (t === 'dark' ? 'light' : 'dark')), [])
   const toggleLang = useCallback(() => {
     const next = i18n.language === 'zh' ? 'en' : 'zh'

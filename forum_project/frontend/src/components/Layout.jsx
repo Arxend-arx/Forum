@@ -49,6 +49,14 @@ export function Sidebar() {
           </svg>
           <span>{t('profile')}</span>
         </NavLink>
+        {user && user.role === 'admin' && (
+          <NavLink to="/admin" className={({ isActive }) => (isActive ? 'active' : '')}>
+            <svg className="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <path d="M12 1l8.7 4.3v5.6c0 5.1-3.7 9.9-8.7 11.1-5-1.2-8.7-6-8.7-11.1V5.3z" />
+            </svg>
+            <span>{t('manage')}</span>
+          </NavLink>
+        )}
       </nav>
       <div className="spacer" />
       <div className="ctrl">

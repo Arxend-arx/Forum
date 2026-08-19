@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react'
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { api } from '../api/client'
-import { PostCard, SkeletonList, EmptyState } from '../components'
+import { PostCard, SkeletonList, EmptyState, Markdown } from '../components'
 
 export default function Home() {
   const { t } = useTranslation()
@@ -14,8 +14,10 @@ export default function Home() {
   const [keyword, setKeyword] = useState('')
   const [sort, setSort] = useState('latest')
   const [tag, setTag] = useState(params.get('tag') || '')
+  const [anns, setAnns] = useState([])
 
   useEffect(() => { api.get('/tags').then(setTagList).catch(() => setTagList([])) }, [])
+  useEffect(() => { api.get('/announcements').then(setAnns).catch(() => setAnns([])) }, [])
 
   useEffect(() => {
     let alive = true
@@ -49,6 +51,24 @@ export default function Home() {
           <Link className="btn btn-primary" to="/create">+ {t('newPost')}</Link>
         </div>
       </div>
+
+      {anns.length > 0 && (
+        <div className="card" style={{ borderColor: 'rgba(255,190,90,.45)', marginBottom: 12 }}>
+          <div className="row" style={{ justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
+            <div className="card-title">📢 {t('announcements')}</div>
+            <Link className="btn btn-ghost btn-sm" to="/announcements">{t('viewAllAnnouncements')}</Link>
+          </div>
+          {anns.slice(0, 3).map((a) => (
+            <div key={a.id} style={{ padding: '8px 0', borderTop: '1px solid var(--border)' }}>
+              <div style={{ fontWeight: 700, fontSize: 14 }}>{a.title}</div>
+              <div className="muted" style={{ fontSize: 12.5, margin: '2px 0 6px' }}>
+                👤 {a.publisher_username || t('admin')} · {a.create_time}
+              </div>
+              <Markdown text={a.content} />
+            </div>
+          ))}
+        </div>
+      )}
 
       <div className="card filter-bar">
         <div className="row" style={{ gap: 10, flexWrap: 'wrap' }}>

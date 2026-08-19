@@ -15,7 +15,7 @@
 ┌─────────────────────────────┐        ┌──────────────────────────────┐
 │   React SPA（独立工程）       │  HTTP  │   Flask REST API 服务         │
 │   Vite + React 18 + Router   │ ─────► │   /api/* JSON                │
-│   i18n / 主题 / 组件化        │  JSON  │   PostgreSQL 16（独立容器）   │
+│   i18n / 主题 / 组件化        │  JSON  │   SQLite3 (forum.db)         │
 │   Dev: :5173  Prod: 静态托管 │ ◄───── │   academic_match.py 复用      │
 └─────────────────────────────┘        └──────────────────────────────┘
               │  CORS (allow credentials) / 开发期 Vite 代理
@@ -87,7 +87,7 @@
 ### 2.8 学术匹配 / LLM
 | 方法 | 路径 | 说明 | 权限 |
 |---|---|---|---|
-| GET | /api/match | 入口状态（学习意向 / LLM 可用 / 文献源可用） | 登录 |
+| GET | /api/match | 入口状态（学习意向/LLM 可用/MCP 可用） | 登录 |
 | POST | /api/match/search | 检索 `{keyword, use_interest, use_llm}` → 重定向结果 id | 登录 |
 | GET | /api/match/result/{id} | 结果页数据 | 登录 |
 | GET | /api/match/history | 历史记录 | 登录 |
@@ -159,6 +159,6 @@ frontend/                # 新增 React 工程
 
 ## 5. 数据与兼容
 
-- 数据库为 **PostgreSQL 16**（独立容器 `academy-db`，数据卷持久化）；后端通过 `psycopg2` 直连，`init_db()` 幂等建表 + 兼容迁移（`ADD COLUMN IF NOT EXISTS`）。
-- `academic_match.py` 提供 OpenAlex 文献检索（免费源，无需 Key）+ 用户自配 LLM 分析；`config.json` 仅含说明文案，无密钥。
-- 上传目录 `static/uploads` 不变（后端上传卷挂载）；新架构下图片 URL 由后端返回 `/uploads/*` 或 `/api/upload` 结果。
+- 数据库沿用 `forum.db`，表结构不变，仅 `app.py` 内部逻辑重构；历史数据零迁移。
+- `academic_match.py`、`config.json`、`.mcp_tools_cache.json` 原样复用。
+- 上传目录 `static/uploads` 不变；新架构下图片 URL 由后端返回 `/uploads/*` 或 `/api/upload` 结果。

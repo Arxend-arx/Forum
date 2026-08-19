@@ -66,7 +66,7 @@ export default function PostDetail() {
         </div>
         <div className="divider" />
         <Markdown text={post.content} />
-        {post.is_mine && (
+        {(post.is_mine || (user && user.role === 'admin')) && (
           <div className="row mt-3">
             <button className="btn btn-danger btn-sm" onClick={() => setConfirm({ title: t('deletePost'), text: t('confirmDelPost'), okText: t('delete'), onOk: doDelete })}>
               🗑 {t('deletePost')}

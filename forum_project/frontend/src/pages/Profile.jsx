@@ -3,11 +3,12 @@ import { Link, useParams, useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { api } from '../api/client'
 import { useApp } from '../context/AppContext'
-import { Avatar, EmptyState, SkeletonList } from '../components'
+import { Avatar, EmptyState, SkeletonList, Flag } from '../components'
+import { countryName } from '../constants/countries'
 
 export default function Profile() {
   const { id } = useParams()
-  const { t } = useTranslation()
+  const { t, i18n } = useTranslation()
   const { user, toast, refreshUser, logout } = useApp()
   const navigate = useNavigate()
   const [data, setData] = useState(null)
@@ -58,11 +59,17 @@ export default function Profile() {
           <div className="grow">
             <h1 style={{ fontSize: 22, fontWeight: 800 }}>
               {p.username}
+              {p.role === 'admin' && <span className="tag warn" style={{ marginLeft: 8 }}>★ {t('adminBadge')}</span>}
               {!isMe && (p.is_online
                 ? <span className="tag success" style={{ marginLeft: 8 }}>● {t('online')}</span>
                 : <span className="tag" style={{ marginLeft: 8 }}>● {t('offline')}</span>)}
             </h1>
             <div className="muted mt-1" style={{ fontSize: 13 }}>{t('joined')} {p.create_time}</div>
+            {p.nationality && (
+              <div className="muted" style={{ fontSize: 13, display: 'flex', alignItems: 'center', gap: 6 }}>
+                <Flag code={p.nationality} size={15} /> {countryName(p.nationality, i18n.language)}
+              </div>
+            )}
             {p.bio && <p className="mt-2" style={{ fontSize: 14, color: 'var(--text-2)' }}>{p.bio}</p>}
             {p.learning_interest && (
               <div className="row mt-2 wrap" style={{ gap: 6 }}>

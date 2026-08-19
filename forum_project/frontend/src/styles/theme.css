@@ -198,6 +198,7 @@ img,video{max-width:100%}
 .grow{flex:1}
 .center{text-align:center}
 .divider{height:1px;background:var(--border);margin:16px 0}
+.danger-zone{border-color:rgba(255,80,90,.35)}
 
 /* ---------- 列表项 ---------- */
 .list-item{display:flex;align-items:center;gap:12px;padding:13px 6px;border-bottom:1px solid var(--border)}

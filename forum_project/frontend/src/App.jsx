@@ -19,11 +19,21 @@ import Chat from './pages/Chat'
 import ChatDetail from './pages/ChatDetail'
 import Messages from './pages/Messages'
 import Friends from './pages/Friends'
+import Admin from './pages/Admin'
+import Announcements from './pages/Announcements'
 
 function RequireAuth({ children }) {
   const { user, authReady } = useApp()
   if (!authReady) return null // 等待会话恢复，避免闪烁
   if (!user) return <Navigate to="/login" replace />
+  return children
+}
+
+function RequireAdmin({ children }) {
+  const { user, authReady } = useApp()
+  if (!authReady) return null
+  if (!user) return <Navigate to="/login" replace />
+  if (user.role !== 'admin') return <Navigate to="/" replace />
   return children
 }
 
@@ -35,6 +45,7 @@ export default function App() {
 
       <Route element={<Layout />}>
         <Route path="/" element={<Home />} />
+        <Route path="/announcements" element={<Announcements />} />
         <Route path="/post/:id" element={<PostDetail />} />
         <Route path="/search" element={<Search />} />
         <Route path="/profile/:id" element={<Profile />} />
@@ -49,6 +60,7 @@ export default function App() {
         <Route path="/chat/:userId" element={<RequireAuth><ChatDetail /></RequireAuth>} />
         <Route path="/messages" element={<RequireAuth><Messages /></RequireAuth>} />
         <Route path="/friends/requests" element={<RequireAuth><Friends /></RequireAuth>} />
+        <Route path="/admin" element={<RequireAdmin><Admin /></RequireAdmin>} />
       </Route>
 
       <Route path="*" element={<Navigate to="/" replace />} />

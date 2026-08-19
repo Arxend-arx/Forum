@@ -3,6 +3,7 @@ import { Link, useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import katex from 'katex'
 import 'katex/dist/katex.min.css'
+import { flagEmoji } from '../constants/countries'
 
 /* ---------- 头像（有图显图，无图显首字） ---------- */
 export function Avatar({ name, size, className, src }) {
@@ -24,6 +25,25 @@ export function Avatar({ name, size, className, src }) {
     )
   }
   return <span className={`avatar ${className || ''}`} style={style}>{ch}</span>
+}
+
+/* ---------- 国旗（SVG 本地资源；Windows 系统字体无法渲染 emoji 国旗会退化为字母） ---------- */
+const FLAG_IMAGES = import.meta.glob('../assets/flags/*.svg', { eager: true, query: '?url', import: 'default' })
+
+export function Flag({ code, size = 16, style }) {
+  if (!code) return null
+  const url = FLAG_IMAGES[`../assets/flags/${code.toLowerCase()}.svg`]
+  if (!url) {
+    // 兜底：未知代码渲染 emoji（可能显示为字母缩写）
+    return <span style={{ fontSize: size, lineHeight: 1, ...style }}>{flagEmoji(code)}</span>
+  }
+  return (
+    <img
+      src={url}
+      alt={code}
+      style={{ width: size, height: Math.round(size * 0.75), objectFit: 'cover', borderRadius: 2, display: 'inline-block', verticalAlign: '-2px', ...style }}
+    />
+  )
 }
 
 /* ---------- 常用表情列表 ---------- */
