@@ -4,6 +4,7 @@ import { useTranslation } from 'react-i18next'
 import { api } from '../api/client'
 import { useApp } from '../context/AppContext'
 import { Avatar, EmptyState, SkeletonList, Markdown, MarkdownEditor, useConfirm } from '../components'
+import Icon from '../components/Icon'
 
 export default function Admin() {
   const { t } = useTranslation()
@@ -61,7 +62,7 @@ export default function Admin() {
       <div className="page-head">
         <div>
           <h1>{t('adminPanel')}</h1>
-          <div className="sub">★ {t('admin')}</div>
+          <div className="sub"><Icon name="star" size={12} /> {t('admin')}</div>
         </div>
       </div>
 
@@ -99,16 +100,16 @@ export default function Admin() {
                         <div className="meta">
                           <div className="author">
                             {a.publisher_username || t('admin')}
-                            {a.publisher_role === 'admin' && <span className="tag warn" style={{ marginLeft: 8 }}>★ {t('adminBadge')}</span>}
+                            {a.publisher_role === 'admin' && <span className="tag warn" style={{ marginLeft: 8 }}><Icon name="star" size={11} /> {t('adminBadge')}</span>}
                           </div>
                           <div className="time">{a.create_time}</div>
                         </div>
                       </div>
-                      <div className="card-title">📢 {a.title}</div>
+                      <div className="card-title"><Icon name="bell" size={16} /> {a.title}</div>
                       <Markdown text={a.content} />
                     </div>
                     <button className="btn btn-ghost btn-sm" onClick={() => setConfirm({ title: t('deleteAnnounce'), text: a.title, okText: t('delete'), onOk: () => delAnn(a.id) })}>
-                      🗑 {t('deleteAnnounce')}
+                      <Icon name="trash" size={14} /> {t('deleteAnnounce')}
                     </button>
                   </div>
                 </div>
@@ -141,7 +142,7 @@ export default function Admin() {
                   <div className="main">
                     <div className="title">
                       <Link to={`/profile/${u.id}`}>{u.username}</Link>
-                      {u.role === 'admin' && <span className="tag warn" style={{ marginLeft: 8 }}>★ {t('adminBadge')}</span>}
+                      {u.role === 'admin' && <span className="tag warn" style={{ marginLeft: 8 }}><Icon name="star" size={11} /> {t('adminBadge')}</span>}
                     </div>
                     <div className="desc">#{u.id} · {u.create_time}</div>
                   </div>

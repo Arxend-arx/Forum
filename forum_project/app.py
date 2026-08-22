@@ -8,13 +8,18 @@ AcademicForumLite - Flask REST API 后端（前后端分离版 · PostgreSQL）
 """
 
 import json
+import math
 import os
 import queue
+import random
 import re
+import smtplib
 import threading
 import time
 import uuid
-from datetime import datetime
+from datetime import datetime, timedelta
+from email.header import Header
+from email.mime.text import MIMEText
 from functools import wraps
 
 import psycopg2
@@ -24,7 +29,9 @@ from flask import Flask, request, session, g, jsonify
 from academic_match import (
     search_openalex,
     llm_chat, analyze_matches, save_search,
+    fetch_openalex_doi,
 )
+from starlink import profile_vec, vec_to_sky, jitter_sky, cosine
 
 # ---------------------------------------------------------------------------
 # App 初始化
@@ -152,6 +159,22 @@ def init_db():
             content     TEXT    NOT NULL,
             create_time TEXT    NOT NULL
         )""",
+        """CREATE TABLE IF NOT EXISTS vote (
+            id          SERIAL PRIMARY KEY,
+            post_id     INTEGER NOT NULL REFERENCES post(id) ON DELETE CASCADE,
+            user_id     INTEGER NOT NULL REFERENCES "user"(id),
+            value       INTEGER NOT NULL DEFAULT 0,
+            create_time TEXT    NOT NULL,
+            UNIQUE(post_id, user_id)
+        )""",
+        """CREATE TABLE IF NOT EXISTS comment_vote (
+            id          SERIAL PRIMARY KEY,
+            comment_id  INTEGER NOT NULL REFERENCES comment(id) ON DELETE CASCADE,
+            user_id     INTEGER NOT NULL REFERENCES "user"(id),
+            value       INTEGER NOT NULL DEFAULT 0,
+            create_time TEXT    NOT NULL,
+            UNIQUE(comment_id, user_id)
+        )""",
         """CREATE TABLE IF NOT EXISTS follow (
             id          SERIAL PRIMARY KEY,
             follower_id INTEGER NOT NULL REFERENCES "user"(id),
@@ -202,6 +225,21 @@ def init_db():
             create_time TEXT    NOT NULL,
             UNIQUE(from_id, to_id)
         )""",
+        """CREATE TABLE IF NOT EXISTS user_search (
+            id          SERIAL PRIMARY KEY,
+            user_id     INTEGER NOT NULL REFERENCES "user"(id),
+            keyword     TEXT    NOT NULL,
+            count       INTEGER NOT NULL DEFAULT 1,
+            update_time TEXT    NOT NULL,
+            UNIQUE(user_id, keyword)
+        )""",
+        """CREATE TABLE IF NOT EXISTS bookmark (
+            id          SERIAL PRIMARY KEY,
+            user_id     INTEGER NOT NULL REFERENCES "user"(id),
+            post_id     INTEGER NOT NULL REFERENCES post(id) ON DELETE CASCADE,
+            create_time TEXT    NOT NULL,
+            UNIQUE(user_id, post_id)
+        )""",
     ]
     for stmt in schema_statements:
         cur.execute(stmt)
@@ -227,6 +265,57 @@ def init_db():
     cur.execute(
         'ALTER TABLE "user" ADD COLUMN IF NOT EXISTS role TEXT NOT NULL DEFAULT \'user\''
     )
+    # Starlink 星辰绑定：天球坐标 + 画像向量（Polestar 页面沿用）
+    cur.execute(
+        'ALTER TABLE "user" ADD COLUMN IF NOT EXISTS sky_az DOUBLE PRECISION NOT NULL DEFAULT 0'
+    )
+    cur.execute(
+        'ALTER TABLE "user" ADD COLUMN IF NOT EXISTS sky_alt DOUBLE PRECISION NOT NULL DEFAULT 0'
+    )
+    cur.execute(
+        'ALTER TABLE "user" ADD COLUMN IF NOT EXISTS profile_vec TEXT NOT NULL DEFAULT \'\''
+    )
+    # Starlink 学术邮箱 + 论文 Articles（学术邮箱唯一绑定 + 验证码）
+    cur.execute(
+        'ALTER TABLE "user" ADD COLUMN IF NOT EXISTS academic_email TEXT NOT NULL DEFAULT \'\''
+    )
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS article (
+            id          SERIAL PRIMARY KEY,
+            user_id     INTEGER NOT NULL REFERENCES "user"(id),
+            doi         TEXT NOT NULL,
+            title       TEXT NOT NULL,
+            authors     TEXT NOT NULL DEFAULT '',
+            venue       TEXT NOT NULL DEFAULT '',
+            year        TEXT NOT NULL DEFAULT '',
+            create_time TEXT NOT NULL
+        )
+    """)
+    cur.execute("CREATE INDEX IF NOT EXISTS idx_article_user ON article(user_id)")
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS email_code (
+            id          SERIAL PRIMARY KEY,
+            user_id     INTEGER NOT NULL REFERENCES "user"(id),
+            email       TEXT NOT NULL,
+            code        TEXT NOT NULL,
+            expires_at  TEXT NOT NULL,
+            create_time TEXT NOT NULL
+        )
+    """)
+    # 集星瓶成就记录（每个成就类型每个用户唯一，永久记录）
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS achievement (
+            id          SERIAL PRIMARY KEY,
+            user_id     INTEGER NOT NULL REFERENCES "user"(id),
+            type        TEXT NOT NULL,
+            star        INTEGER NOT NULL DEFAULT 1,
+            create_time TEXT NOT NULL,
+            UNIQUE(user_id, type)
+        )
+    """)
+    # 发帖/被关注改为「每次 +1 星」计数制（由 post/follow 实时统计），
+    # 清理旧的首次发帖/首次获粉记录，避免重复计星
+    cur.execute("DELETE FROM achievement WHERE type IN ('first_post', 'first_follower')")
     # 公告表
     cur.execute("""
         CREATE TABLE IF NOT EXISTS announcement (
@@ -237,6 +326,20 @@ def init_db():
             create_time TEXT    NOT NULL
         )
     """)
+    # 用户行为表：浏览/点赞/收藏/分享（资讯推荐算法信号源）
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS user_interact (
+            id          SERIAL PRIMARY KEY,
+            user_id     INTEGER NOT NULL REFERENCES "user"(id),
+            post_id     INTEGER NOT NULL REFERENCES post(id) ON DELETE CASCADE,
+            action      TEXT    NOT NULL,     -- view | like | save | share
+            create_time TEXT    NOT NULL,
+            UNIQUE(user_id, post_id, action)
+        )
+    """)
+    cur.execute(
+        "CREATE INDEX IF NOT EXISTS idx_interact_user ON user_interact(user_id)"
+    )
     # 兼容迁移：为旧公告表补发布者列（可空；旧行无发布者记录，留 NULL 表示系统发布。
     # 注意不能加 NOT NULL DEFAULT 0 + 外键——会为旧行填充 0 并立即校验外键而失败）
     cur.execute(
@@ -315,10 +418,16 @@ def api_register():
     db = get_db()
     if db.execute("SELECT id FROM \"user\" WHERE username = %s", (username,)).fetchone():
         return fail("用户名已存在，请更换")
-    db.execute(
-        "INSERT INTO \"user\" (username, password, create_time) VALUES (%s, %s, %s)",
+    cur = db.execute(
+        "INSERT INTO \"user\" (username, password, create_time) "
+        "VALUES (%s, %s, %s) RETURNING id",
         (username, password, now()))
     db.commit()
+    new_id = cur.fetchone()["id"]
+    # 注册即绑定一颗星（画像为空 → 位置由 user id 抖动兜底，编辑资料后再定位）
+    _ensure_star(db, new_id)
+    # 集星瓶：注册成就
+    _grant_achievement(db, new_id, "register", _ACHIEVEMENT_STAR["register"])
     return ok({"username": username})
 
 
@@ -380,6 +489,21 @@ def _post_row(db, row):
     p["comment_count"] = db.execute(
         "SELECT COUNT(*) AS c FROM comment WHERE post_id = %s",
         (p["id"],)).fetchone()["c"]
+    p["score"] = db.execute(
+        "SELECT COALESCE(SUM(value), 0) AS s FROM vote WHERE post_id = %s",
+        (p["id"],)).fetchone()["s"]
+    p["my_vote"] = 0
+    p["is_bookmarked"] = False
+    _uid = session.get("user_id")
+    if _uid:
+        _v = db.execute(
+            "SELECT value FROM vote WHERE post_id = %s AND user_id = %s",
+            (p["id"], _uid)).fetchone()
+        p["my_vote"] = _v["value"] if _v else 0
+        _b = db.execute(
+            "SELECT 1 FROM bookmark WHERE post_id = %s AND user_id = %s",
+            (p["id"], _uid)).fetchone()
+        p["is_bookmarked"] = bool(_b)
     return p
 
 
@@ -388,24 +512,139 @@ def api_posts():
     db = get_db()
     sort = request.args.get("sort", "latest")          # latest | hot
     tag = (request.args.get("tag") or "").strip()
+    limit = request.args.get("limit", type=int)        # 可选：最多返回条数（Landing/Feed 用）
     where, params = "", []
     if tag:
         where = " WHERE p.tags LIKE %s"
         params.append(f"%{tag}%")
-    order = (
-        " ORDER BY (SELECT COUNT(*) FROM comment c WHERE c.post_id = p.id) DESC, "
-        "p.create_time DESC, p.id DESC"
-        if sort == "hot"
-        else " ORDER BY p.create_time DESC, p.id DESC"
-    )
-    rows = db.execute(f"""
+    sql = f"""
         SELECT p.id, p.user_id, p.title, p.content, p.tags, p.create_time, p.update_time
-        FROM post p{where}{order}
-    """, params).fetchall()
+        FROM post p{where}
+    """
+    rows = db.execute(sql, params).fetchall()
     posts = [_post_row(db, r) for r in rows]
+    if sort == "hot":
+        # Reddit 官方 Hot 算法：log10(|score|) 压缩 + 符号 + 时间衰减(45000s)
+        def _hot_key(p):
+            score = p.get("score") or 0
+            try:
+                dt = datetime.strptime(p["create_time"], "%Y-%m-%d %H:%M:%S")
+            except Exception:
+                dt = datetime.now()
+            seconds = max((datetime.now() - dt).total_seconds(), 0)
+            order = math.log10(max(abs(score), 1))
+            sign = 1 if score > 0 else (-1 if score < 0 else 0)
+            return sign * order + seconds / 45000.0
+        posts.sort(key=_hot_key, reverse=True)
+    else:
+        posts.sort(key=lambda p: (p["create_time"], p["id"]), reverse=True)
+    if limit and limit > 0:
+        posts = posts[:limit]
     for p in posts:  # 列表页裁剪正文
         p["content"] = (p["content"] or "")[:200]
     return ok(posts)
+
+
+@app.route("/api/feed/recommended", methods=["GET"])
+@login_required
+def api_feed_recommended():
+    """资讯推荐：SQL 评分 = 兴趣标签匹配 + 社交距离 + 热度 - 已读衰减。
+
+    score = 0.6*标签命中 + 0.3*社交(关注/好友作者) + 0.2*热度 - 0.3*已读
+    冷启动（无画像无行为）时退化为全站 hot。
+    """
+    db = get_db()
+    uid = _current_user_id()
+    limit = min(request.args.get("limit", type=int) or 30, 100)
+    offset = request.args.get("offset", type=int) or 0
+
+    # 1) 构建用户兴趣画像标签（研究方向 + 搜索高频词 + 点赞/收藏帖子的标签）
+    interest_tags = set()
+    row = db.execute(
+        "SELECT learning_interest FROM \"user\" WHERE id = %s", (uid,)).fetchone()
+    if row and row["learning_interest"]:
+        interest_tags |= {t.strip().lower() for t in row["learning_interest"].split(",") if t.strip()}
+    rows = db.execute(
+        "SELECT keyword FROM user_search WHERE user_id = %s "
+        "ORDER BY count DESC LIMIT 5", (uid,)).fetchall()
+    for r in rows:
+        interest_tags.add(r["keyword"].strip().lower())
+    rows = db.execute(
+        "SELECT p.tags FROM user_interact i JOIN post p ON p.id = i.post_id "
+        "WHERE i.user_id = %s AND i.action IN ('like','save')", (uid,)).fetchall()
+    for r in rows:
+        for t in (r["tags"] or "").split(","):
+            if t.strip():
+                interest_tags.add(t.strip().lower())
+
+    # 2) 关注 + 好友集合（社交距离）
+    social = set()
+    rows = db.execute(
+        "SELECT followed_id AS other FROM follow WHERE follower_id = %s "
+        "UNION SELECT friend_id FROM friend WHERE user_id = %s",
+        (uid, uid)).fetchall()
+    social = {r["other"] for r in rows}
+
+    # 3) 已读帖子（view/save 过 → 降权），排除自己的帖子
+    seen = db.execute(
+        "SELECT post_id FROM user_interact "
+        "WHERE user_id = %s AND action IN ('view','save')",
+        (uid,)).fetchall()
+    seen_ids = {r["post_id"] for r in seen}
+
+    posts = db.execute(f"""
+        SELECT p.id, p.user_id, p.title, p.content, p.tags, p.create_time,
+               (SELECT COUNT(*) FROM comment c WHERE c.post_id = p.id) AS comment_count
+        FROM post p
+        WHERE p.user_id != %s
+        ORDER BY (
+            0.6 * (
+                SELECT COUNT(*) FROM unnest(string_to_array(lower(p.tags), ',')) t
+                WHERE btrim(t) = ANY(%s::text[])
+            )
+            + 0.3 * (CASE WHEN p.user_id = ANY(%s::int[]) THEN 1 ELSE 0 END)
+            + 0.2 * LEAST((SELECT COUNT(*) FROM comment c WHERE c.post_id = p.id)::float / 3, 2.0)
+            - 0.3 * (CASE WHEN p.id = ANY(%s::int[]) THEN 1 ELSE 0 END)
+        ) DESC, p.create_time DESC, p.id DESC
+        LIMIT %s OFFSET %s
+    """, (uid, list(interest_tags) or [""], list(social) or [0], list(seen_ids) or [0], limit, offset)).fetchall()
+
+    # 4) 为每条附推荐理由（与评分来源对应）
+    tag_set = interest_tags
+    out = []
+    for r in posts:
+        p = dict(r)
+        p["content"] = (p["content"] or "")[:200]
+        reason = "hot"
+        tags_l = {t.strip().lower() for t in (p.get("tags") or "").split(",") if t.strip()}
+        if p["user_id"] in social:
+            reason = "social"
+        elif tags_l & tag_set:
+            reason = "interest"
+        if p["id"] in seen_ids and reason == "hot":
+            reason = "explore"
+        p["reason"] = reason
+        out.append(_post_row(db, p))
+    return ok(out)
+
+
+@app.route("/api/stats")
+def api_stats():
+    """全站统计：学者数 / 讨论数 / 文献检索数 / 标签数（Landing Hero 用）"""
+    db = get_db()
+    scholars = db.execute('SELECT COUNT(*) AS c FROM "user"').fetchone()["c"]
+    discussions = db.execute("SELECT COUNT(*) AS c FROM post").fetchone()["c"]
+    literature = db.execute("SELECT COUNT(*) AS c FROM academic_search").fetchone()["c"]
+    tags = db.execute(
+        "SELECT COUNT(DISTINCT tag) AS c FROM "
+        "(SELECT unnest(string_to_array(tags, ',')) AS tag FROM post WHERE tags <> '') t"
+    ).fetchone()["c"]
+    return ok({
+        "scholars": scholars,
+        "discussions": discussions,
+        "literature": literature,
+        "tags": tags,
+    })
 
 
 @app.route("/api/tags")
@@ -422,6 +661,20 @@ def api_tags():
     return ok([{"name": name, "count": count} for name, count in tags])
 
 
+@app.route("/api/tags/top")
+@login_required
+def api_tags_top():
+    """当前用户最常搜的 3 个标签（基于 user_search 计数，实时更新）"""
+    db = get_db()
+    rows = db.execute("""
+        SELECT keyword, count FROM user_search
+        WHERE user_id = %s
+        ORDER BY count DESC, update_time DESC, id DESC
+        LIMIT 3
+    """, (session["user_id"],)).fetchall()
+    return ok([{"name": r["keyword"], "count": r["count"]} for r in rows])
+
+
 @app.route("/api/posts", methods=["POST"])
 @login_required
 def api_create_post():
@@ -432,12 +685,91 @@ def api_create_post():
         return fail("标题和内容不能为空")
     db = get_db()
     tags = _extract_tags(content)
+    category = (data.get("category") or "").strip().lstrip("#")
+    if category:
+        # 版块（r/）作为第一个标签，与正文 #标签 去重合并
+        merged = [category] + [t for t in tags.split(",") if t and t != category]
+        tags = ",".join(merged[:5])
     cur = db.execute(
         "INSERT INTO post (user_id, title, content, tags, create_time, update_time) "
         "VALUES (%s, %s, %s, %s, %s, %s) RETURNING id",
         (_current_user_id(), title, content, tags, now(), now()))
     db.commit()
+    # 集星瓶：发帖每次 +1 星（总星数实时统计，无需写成就表）
     return ok({"id": cur.fetchone()["id"]}), 201
+
+
+@app.route("/api/posts/<int:post_id>/vote", methods=["POST"])
+@login_required
+def api_vote(post_id):
+    """真实投票：value=1 赞 / -1 踩 / 0 取消投票"""
+    data = request.get_json(silent=True) or {}
+    try:
+        value = int(data.get("value", 0))
+    except (TypeError, ValueError):
+        return fail("无效的投票值")
+    if value not in (1, -1, 0):
+        return fail("无效的投票值")
+    db = get_db()
+    post = db.execute("SELECT id FROM post WHERE id = %s", (post_id,)).fetchone()
+    if post is None:
+        return fail("帖子不存在", 404)
+    uid = session.get("user_id")
+    if value == 0:
+        db.execute("DELETE FROM vote WHERE post_id = %s AND user_id = %s", (post_id, uid))
+    else:
+        db.execute(
+            "INSERT INTO vote (post_id, user_id, value, create_time) "
+            "VALUES (%s, %s, %s, %s) "
+            "ON CONFLICT (post_id, user_id) DO UPDATE SET value = EXCLUDED.value",
+            (post_id, uid, value, now()))
+    db.commit()
+    score = db.execute(
+        "SELECT COALESCE(SUM(value), 0) AS s FROM vote WHERE post_id = %s",
+        (post_id,)).fetchone()["s"]
+    return ok({"score": score, "my_vote": value})
+
+
+@app.route("/api/posts/<int:post_id>/bookmark", methods=["POST", "DELETE"])
+@login_required
+def api_bookmark(post_id):
+    """收藏 / 取消收藏帖子（POST 收藏，DELETE 取消）"""
+    db = get_db()
+    post = db.execute("SELECT id FROM post WHERE id = %s", (post_id,)).fetchone()
+    if post is None:
+        return fail("帖子不存在", 404)
+    uid = session.get("user_id")
+    if request.method == "POST":
+        db.execute(
+            "INSERT INTO bookmark (user_id, post_id, create_time) "
+            "VALUES (%s, %s, %s) "
+            "ON CONFLICT (user_id, post_id) DO NOTHING",
+            (uid, post_id, now()))
+        bookmarked = True
+    else:
+        db.execute(
+            "DELETE FROM bookmark WHERE user_id = %s AND post_id = %s",
+            (uid, post_id))
+        bookmarked = False
+    db.commit()
+    return ok({"is_bookmarked": bookmarked})
+
+
+@app.route("/api/bookmarks")
+@login_required
+def api_my_bookmarks():
+    """我的收藏列表（按收藏时间倒序）"""
+    db = get_db()
+    rows = db.execute("""
+        SELECT p.* FROM bookmark b
+        JOIN post p ON p.id = b.post_id
+        WHERE b.user_id = %s
+        ORDER BY b.create_time DESC, b.id DESC
+    """, (session["user_id"],)).fetchall()
+    posts = [_post_row(db, r) for r in rows]
+    for p in posts:
+        p["content"] = (p["content"] or "")[:200]
+    return ok(posts)
 
 
 @app.route("/api/posts/<int:post_id>", methods=["GET"])
@@ -448,12 +780,46 @@ def api_post_detail(post_id):
     if row is None:
         return fail("帖子不存在", 404)
     post = _post_row(db, row)
+    sort = request.args.get("sort", "latest")          # latest | hot
     comments = db.execute("""
-        SELECT c.*, u.username, u.avatar AS user_avatar FROM comment c
+        SELECT c.id, c.user_id, c.content, c.create_time,
+               u.username, u.avatar AS user_avatar,
+               COALESCE(SUM(cv.value), 0) AS score
+        FROM comment c
         JOIN "user" u ON c.user_id = u.id
-        WHERE c.post_id = %s ORDER BY c.create_time ASC, c.id ASC
+        LEFT JOIN comment_vote cv ON cv.comment_id = c.id
+        WHERE c.post_id = %s
+        GROUP BY c.id, u.username, u.avatar
     """, (post_id,)).fetchall()
-    post["comments"] = [dict(c) for c in comments]
+    comments = [dict(c) for c in comments]
+    _uid = session.get("user_id")
+    if _uid and comments:
+        _ids = [c["id"] for c in comments]
+        _votes = db.execute(
+            "SELECT comment_id, value FROM comment_vote "
+            "WHERE user_id = %s AND comment_id = ANY(%s)",
+            (_uid, _ids)).fetchall()
+        _vm = {v["comment_id"]: v["value"] for v in _votes}
+        for c in comments:
+            c["my_vote"] = _vm.get(c["id"], 0)
+    else:
+        for c in comments:
+            c["my_vote"] = 0
+
+    def _c_hot_key(c):
+        score = c.get("score") or 0
+        try:
+            dt = datetime.strptime(c["create_time"], "%Y-%m-%d %H:%M:%S")
+        except Exception:
+            dt = datetime.now()
+        seconds = max((datetime.now() - dt).total_seconds(), 0)
+        order = math.log10(max(abs(score), 1))
+        sign = 1 if score > 0 else (-1 if score < 0 else 0)
+        return sign * order + seconds / 45000.0
+
+    comments.sort(key=_c_hot_key if sort == "hot" else lambda c: (c["create_time"], c["id"]),
+                  reverse=(sort == "hot"))
+    post["comments"] = comments
     post["is_mine"] = session.get("user_id") == row["user_id"]
     return ok(post)
 
@@ -506,6 +872,39 @@ def api_delete_comment(comment_id):
     return ok()
 
 
+@app.route("/api/comments/<int:comment_id>/vote", methods=["POST"])
+@login_required
+def api_comment_vote(comment_id):
+    """评论真实投票：value=1 赞 / -1 踩 / 0 取消投票"""
+    data = request.get_json(silent=True) or {}
+    try:
+        value = int(data.get("value", 0))
+    except (TypeError, ValueError):
+        return fail("无效的投票值")
+    if value not in (1, -1, 0):
+        return fail("无效的投票值")
+    db = get_db()
+    comment = db.execute("SELECT id FROM comment WHERE id = %s", (comment_id,)).fetchone()
+    if comment is None:
+        return fail("评论不存在", 404)
+    uid = session.get("user_id")
+    if value == 0:
+        db.execute(
+            "DELETE FROM comment_vote WHERE comment_id = %s AND user_id = %s",
+            (comment_id, uid))
+    else:
+        db.execute(
+            "INSERT INTO comment_vote (comment_id, user_id, value, create_time) "
+            "VALUES (%s, %s, %s, %s) "
+            "ON CONFLICT (comment_id, user_id) DO UPDATE SET value = EXCLUDED.value",
+            (comment_id, uid, value, now()))
+    db.commit()
+    score = db.execute(
+        "SELECT COALESCE(SUM(value), 0) AS s FROM comment_vote WHERE comment_id = %s",
+        (comment_id,)).fetchone()["s"]
+    return ok({"score": score, "my_vote": value})
+
+
 def _parse_mentions(db, content, sender_id, post):
     def _replace(m):
         name = m.group(1)
@@ -544,6 +943,15 @@ def api_search():
     if not q:
         return ok({"posts": [], "users": []})
     db = get_db()
+    # 记录个人搜索关键词（登录用户），供 Feed「最常搜标签」实时统计
+    if session.get("user_id"):
+        db.execute("""
+            INSERT INTO user_search (user_id, keyword, count, update_time)
+            VALUES (%s, %s, 1, %s)
+            ON CONFLICT (user_id, keyword)
+            DO UPDATE SET count = user_search.count + 1, update_time = EXCLUDED.update_time
+        """, (session["user_id"], q[:50], now()))
+        db.commit()
     like = f"%{q}%"
     posts = db.execute("""
         SELECT p.id, p.title, p.content, p.tags, p.create_time, p.user_id, u.username AS author,
@@ -562,13 +970,132 @@ def api_search():
 
 
 # ---------------------------------------------------------------------------
+# Starlink：用户匹配（星空检索）
+#   每个用户绑定一颗星（sky_az/sky_alt，画像向量 profile_vec 投影而来，
+#   画像相近 → 星位相近）。
+#   不带 q：返回全量用户（星空布点，含星位坐标）
+#   带 q  ：按画像向量与查询的余弦相似度排序（用户名命中额外置顶）
+# ---------------------------------------------------------------------------
+def _hash_int(s):
+    h = 2166136261
+    for ch in str(s):
+        h ^= ord(ch)
+        h = (h * 16777619) & 0xFFFFFFFF
+    return h
+
+
+def _profile_text(db, user_id):
+    """拼接画像文本：学习意向 + 签名 + 国籍 + 最近帖子标签"""
+    row = db.execute(
+        'SELECT bio, learning_interest, nationality FROM "user" WHERE id = %s',
+        (user_id,)).fetchone()
+    if row is None:
+        return ""
+    tags = db.execute(
+        "SELECT tags FROM post WHERE user_id = %s AND tags <> '' "
+        "ORDER BY create_time DESC LIMIT 5", (user_id,)).fetchall()
+    tag_text = " ".join(r["tags"] for r in tags if r["tags"])
+    return " ".join([
+        row["learning_interest"] or "",
+        row["bio"] or "",
+        row["nationality"] or "",
+        tag_text,
+    ])
+
+
+def _ensure_star(db, user_id):
+    """计算并持久化用户的星（画像向量 → 天球坐标）。资料变化后调用即重新定位。"""
+    text = _profile_text(db, user_id)
+    vec = profile_vec(text)
+    az, alt = vec_to_sky(vec)
+    az, alt = jitter_sky(user_id, az, alt)
+    db.execute(
+        'UPDATE "user" SET sky_az = %s, sky_alt = %s, profile_vec = %s WHERE id = %s',
+        (az, alt, json.dumps(vec), user_id))
+    db.commit()
+
+
+def _starlink_backfill(db):
+    """懒迁移：给还没有绑定星的用户（含存量用户）计算星位"""
+    rows = db.execute(
+        "SELECT id FROM \"user\" WHERE profile_vec = '' OR profile_vec IS NULL "
+        "LIMIT 200").fetchall()
+    for r in rows:
+        _ensure_star(db, r["id"])
+
+
+@app.route("/api/starlink/users")
+def api_starlink_users():
+    q = (request.args.get("q") or "").strip()
+    db = get_db()
+    _starlink_backfill(db)
+
+    sql = (
+        "SELECT id, username, avatar, bio, learning_interest, nationality, "
+        "sky_az, sky_alt, profile_vec, "
+        "(last_active IS NOT NULL AND last_active > now() - interval '2 minutes') AS is_online "
+        'FROM "user"'
+    )
+    rows = [dict(r) for r in db.execute(sql).fetchall()]
+
+    me = session.get("user_id")
+    for r in rows:
+        r["is_me"] = (r["id"] == me)
+        if me and not r["is_me"]:
+            row = db.execute(
+                "SELECT id FROM follow WHERE follower_id = %s AND followed_id = %s",
+                (me, r["id"])).fetchone()
+            r["is_following"] = row is not None
+            r["friend_status"] = _friend_status(db, me, r["id"])
+
+    if q:
+        qv = profile_vec(q)
+        ql = q.lower()
+        scored = []
+        for r in rows:
+            if r["is_me"]:
+                continue  # 不匹配自己
+            vec = []
+            try:
+                vec = json.loads(r["profile_vec"] or "[]")
+            except Exception:
+                vec = []
+            score = cosine(qv, vec) if vec else -1.0
+            # 用户名精确/前缀命中显著加分（人名优先）
+            if r["username"].lower() == ql:
+                score += 0.5
+            elif r["username"].lower().startswith(ql):
+                score += 0.25
+            if score > 0.02:
+                scored.append((score, r))
+        scored.sort(key=lambda x: (-x[0], -x[1]["is_online"]))
+        rows = [dict(r) | {"score": round(s, 3)} for s, r in scored[:50]]
+    else:
+        rows = [dict(r) for r in rows][:200]
+
+    # 每用户集星瓶总星数（Polestars 星空亮度/大小随星数）
+    star_rows = db.execute(
+        "SELECT user_id, SUM(star) AS s FROM achievement GROUP BY user_id").fetchall()
+    star_map = {r["user_id"]: (r["s"] or 0) for r in star_rows}
+    post_rows = db.execute("SELECT user_id, COUNT(*) AS c FROM post GROUP BY user_id").fetchall()
+    post_map = {r["user_id"]: r["c"] for r in post_rows}
+    fol_rows = db.execute("SELECT followed_id, COUNT(*) AS c FROM follow GROUP BY followed_id").fetchall()
+    fol_map = {r["followed_id"]: r["c"] for r in fol_rows}
+
+    for r in rows:
+        r.pop("profile_vec", None)
+        r["star_total"] = star_map.get(r["id"], 0) + post_map.get(r["id"], 0) + fol_map.get(r["id"], 0)
+    return ok(rows)
+
+
+# ---------------------------------------------------------------------------
 # 用户 / 关注
 # ---------------------------------------------------------------------------
 @app.route("/api/users/<int:user_id>")
 def api_user_profile(user_id):
     db = get_db()
     user = db.execute(
-        "SELECT id, username, avatar, bio, learning_interest, nationality, role, create_time, "
+        "SELECT id, username, avatar, bio, learning_interest, nationality, role, create_time, academic_email, "
         "(last_active IS NOT NULL AND last_active > now() - interval '2 minutes') AS is_online "
         "FROM \"user\" WHERE id = %s", (user_id,)).fetchone()
     if user is None:
@@ -586,6 +1113,14 @@ def api_user_profile(user_id):
     posts = db.execute(
         "SELECT id, title, create_time FROM post WHERE user_id = %s "
         "ORDER BY create_time DESC LIMIT 20", (uid,)).fetchall()
+    articles = db.execute(
+        "SELECT id, doi, title, authors, venue, year, create_time FROM article "
+        "WHERE user_id = %s ORDER BY create_time DESC, id DESC LIMIT 50", (uid,)).fetchall()
+    # 集星瓶：补发历史成就（幂等）并读取成就记录
+    _achievement_backfill(db, uid)
+    achievements = db.execute(
+        "SELECT type, star FROM achievement WHERE user_id = %s ORDER BY create_time, id", (uid,)).fetchall()
+    star_total = _user_star_total(db, uid)
 
     is_following = False
     friend_status = "none"
@@ -597,8 +1132,15 @@ def api_user_profile(user_id):
         is_following = row is not None
         friend_status = _friend_status(db, session["user_id"], user_id)
 
+    u = dict(user)
+    email = (u.get("academic_email") or "").strip()
+    if email and not is_me:
+        # 非本人查看：邮箱脱敏（只留首字母与域名）
+        local, _, dom = email.partition("@")
+        u["academic_email"] = (local[:1] + "***@" + dom) if dom else "***"
+
     return ok({
-        "user": dict(user),
+        "user": u,
         "is_me": is_me,
         "is_following": is_following,
         "friend_status": friend_status,
@@ -608,6 +1150,10 @@ def api_user_profile(user_id):
         "following_list": [dict(r) for r in following_list],
         "follower_list": [dict(r) for r in follower_list],
         "posts": [dict(p) for p in posts],
+        "has_academic_email": bool(email),
+        "articles": [dict(a) for a in articles],
+        "achievements": [dict(a) for a in achievements],
+        "star_total": star_total,
     })
 
 
@@ -637,6 +1183,8 @@ def api_edit_profile():
         "WHERE id = %s",
         (username, nationality, avatar, bio, learning_interest, _current_user_id()))
     db.commit()
+    # 资料变化 → 星随画像重新定位（移到同频学者附近）
+    _ensure_star(db, _current_user_id())
     return ok()
 
 
@@ -659,6 +1207,7 @@ def api_toggle_follow(user_id):
             "INSERT INTO follow (follower_id, followed_id, create_time) VALUES (%s, %s, %s)",
             (_current_user_id(), user_id, now()))
         db.commit()
+        # 集星瓶：被关注每次 +1 星（总星数实时统计）
         return ok({"following": True})
     else:
         if existing:
@@ -709,16 +1258,19 @@ def api_add_friend():
         return fail("已发送过好友请求，等待对方确认")
     if status == "pending_received":
         return fail("对方已向你发送好友请求，请到好友请求页处理")
-    db.execute(
+    cur = db.execute(
         "INSERT INTO friend_request (from_id, to_id, status, create_time) "
-        "VALUES (%s, %s, 'pending', %s)",
+        "VALUES (%s, %s, 'pending', %s) RETURNING id",
         (_current_user_id(), to_id, now()))
+    req_row = cur.fetchone()
+    req_id = req_row["id"] if req_row else ""
     me = db.execute("SELECT username FROM \"user\" WHERE id = %s", (_current_user_id(),)).fetchone()
     db.execute(
         "INSERT INTO message "
         "(msg_type, sender_id, receiver_id, content, link, is_read, create_time) "
         "VALUES ('system', %s, %s, %s, %s, 0, %s)",
-        (_current_user_id(), to_id, f"{me['username']} 请求添加你为好友", "/friends/requests", now()))
+        (_current_user_id(), to_id, f"{me['username']} 请求添加你为好友",
+         f"/friends/requests?req={req_id}", now()))
     db.commit()
     return ok(), 201
 
@@ -784,6 +1336,26 @@ def api_remove_friend(friend_id):
                (friend_id, _current_user_id()))
     db.commit()
     return ok()
+
+
+@app.route("/api/friends/list")
+@login_required
+def api_friend_list():
+    """我的全部好友（含在线状态；按最近聊天时间排序，方便直接私信）"""
+    me = _current_user_id()
+    db = get_db()
+    rows = db.execute("""
+        SELECT u.id, u.username, u.avatar, u.bio,
+               (u.last_active IS NOT NULL AND u.last_active > now() - interval '2 minutes') AS is_online,
+               (SELECT MAX(create_time) FROM message m
+                 WHERE ((m.sender_id = %s AND m.receiver_id = u.id)
+                     OR (m.sender_id = u.id AND m.receiver_id = %s))
+                   AND m.msg_type = 'private') AS last_chat
+        FROM friend f JOIN "user" u ON f.friend_id = u.id
+        WHERE f.user_id = %s
+        ORDER BY last_chat DESC NULLS LAST, u.username
+    """, (me, me, me)).fetchall()
+    return ok([dict(r) for r in rows])
 
 
 # ---------------------------------------------------------------------------
@@ -1289,6 +1861,188 @@ def api_set_user_role(target_id):
     # 实时推送角色变更，目标用户在线时前端立即刷新（无需等待轮询）
     _sse_notify(target_id, {"type": "role_changed", "role": role})
     return ok()
+
+
+# ---------------------------------------------------------------------------
+# Articles：学术邮箱绑定（验证码） + 论文发表（OpenAlex DOI 校验）
+# ---------------------------------------------------------------------------
+def _load_config():
+    try:
+        with open(os.path.join(BASE_DIR, "config.json"), encoding="utf-8") as f:
+            return json.load(f)
+    except Exception:
+        return {}
+
+
+_SMTP = (_load_config().get("smtp") or {})
+_EMAIL_RE = re.compile(r"^[A-Za-z0-9._%+\-]+@[A-Za-z0-9.\-]+\.[A-Za-z]{2,}$")
+
+# 集星瓶成就类型 → 星数（一次性成就）
+# 发帖 / 被关注为「每次 +1 星」：由 post / follow 计数实时统计
+_ACHIEVEMENT_STAR = {
+    "register": 1,       # 注册成为学者
+    "email": 2,          # 绑定学术邮箱
+    "first_article": 3,  # 发布第一篇论文
+}
+
+
+def _grant_achievement(db, user_id, atype, star=1):
+    """记录一次成就（同一用户同一类型只记一次，永久保留）"""
+    db.execute(
+        "INSERT INTO achievement (user_id, type, star, create_time) VALUES (%s, %s, %s, %s) "
+        "ON CONFLICT (user_id, type) DO NOTHING",
+        (user_id, atype, star, now()))
+    db.commit()
+
+
+def _user_star_total(db, user_id):
+    """集星瓶总星数 = 一次性成就星数 + 发帖数（每次+1） + 被关注数（每次+1）"""
+    base = db.execute(
+        "SELECT COALESCE(SUM(star), 0) AS s FROM achievement WHERE user_id = %s",
+        (user_id,)).fetchone()["s"]
+    posts = db.execute("SELECT COUNT(*) AS c FROM post WHERE user_id = %s", (user_id,)).fetchone()["c"]
+    followers = db.execute("SELECT COUNT(*) AS c FROM follow WHERE followed_id = %s", (user_id,)).fetchone()["c"]
+    return (base or 0) + posts + followers
+
+
+def _achievement_backfill(db, user_id):
+    """按现有数据补发成就（幂等）：保证存量用户也能看到一次性星星"""
+    _grant_achievement(db, user_id, "register", _ACHIEVEMENT_STAR["register"])
+    row = db.execute('SELECT academic_email FROM "user" WHERE id = %s', (user_id,)).fetchone()
+    if (row or {}).get("academic_email"):
+        _grant_achievement(db, user_id, "email", _ACHIEVEMENT_STAR["email"])
+    c = db.execute("SELECT COUNT(*) AS c FROM article WHERE user_id = %s", (user_id,)).fetchone()["c"]
+    if c >= 1:
+        _grant_achievement(db, user_id, "first_article", _ACHIEVEMENT_STAR["first_article"])
+
+
+def _send_email(to_addr: str, subject: str, body: str) -> bool:
+    """通过 SMTP 发送邮件；未配置 SMTP 时把内容打印到后端日志（本地测试兜底）"""
+    host = (_SMTP.get("host") or "").strip()
+    if not host:
+        print(f"[EMAIL-DEBUG] to={to_addr} subject={subject}\n{body}", flush=True)
+        return True
+    try:
+        msg = MIMEText(body, "plain", "utf-8")
+        msg["Subject"] = Header(subject, "utf-8")
+        msg["From"] = (_SMTP.get("from") or _SMTP.get("user") or host)
+        msg["To"] = to_addr
+        if _SMTP.get("use_ssl"):
+            server = smtplib.SMTP_SSL(host, int(_SMTP.get("port", 465)), timeout=20)
+        else:
+            server = smtplib.SMTP(host, int(_SMTP.get("port", 25)), timeout=20)
+            server.starttls()
+        if _SMTP.get("user"):
+            server.login(_SMTP.get("user"), _SMTP.get("password") or "")
+        server.sendmail(msg["From"], [to_addr], msg.as_string())
+        server.quit()
+        return True
+    except Exception as exc:
+        print(f"[EMAIL-ERROR] {exc}", flush=True)
+        return False
+
+
+@app.route("/api/email/bind", methods=["POST"])
+@login_required
+def api_email_bind():
+    """申请绑定学术邮箱：校验合法性 + 唯一性 → 发送 6 位验证码（10 分钟有效）"""
+    data = request.get_json(silent=True) or request.form
+    email = (data.get("email") or "").strip().lower()
+    if not _EMAIL_RE.match(email):
+        return fail("邮箱格式不正确")
+    db = get_db()
+    me = _current_user_id()
+    if db.execute('SELECT id FROM "user" WHERE academic_email = %s AND id <> %s',
+                  (email, me)).fetchone():
+        return fail("该学术邮箱已被其他账号绑定，每个邮箱只能绑定一个账号")
+    code = f"{random.randint(0, 999999):06d}"
+    expires = (datetime.now() + timedelta(minutes=10)).strftime("%Y-%m-%d %H:%M:%S")
+    db.execute("DELETE FROM email_code WHERE user_id = %s AND email = %s", (me, email))
+    db.execute(
+        "INSERT INTO email_code (user_id, email, code, expires_at, create_time) "
+        "VALUES (%s, %s, %s, %s, %s)",
+        (me, email, code, expires, now()))
+    db.commit()
+    _send_email(email, "Polarium 学术邮箱验证码",
+                f"你的 Polarium 学术邮箱绑定验证码是：{code}\n验证码 10 分钟内有效，请勿泄露。")
+    return ok({"sent": True})
+
+
+@app.route("/api/email/verify", methods=["POST"])
+@login_required
+def api_email_verify():
+    """校验验证码并永久绑定学术邮箱（唯一性二次检查）"""
+    data = request.get_json(silent=True) or request.form
+    email = (data.get("email") or "").strip().lower()
+    code = (data.get("code") or "").strip()
+    db = get_db()
+    me = _current_user_id()
+    row = db.execute(
+        "SELECT id, expires_at FROM email_code WHERE user_id = %s AND email = %s AND code = %s",
+        (me, email, code)).fetchone()
+    if row is None:
+        return fail("验证码不正确")
+    if (row["expires_at"] or "") < now():
+        db.execute("DELETE FROM email_code WHERE id = %s", (row["id"],))
+        db.commit()
+        return fail("验证码已过期，请重新获取")
+    if db.execute('SELECT id FROM "user" WHERE academic_email = %s AND id <> %s',
+                  (email, me)).fetchone():
+        db.execute("DELETE FROM email_code WHERE user_id = %s AND email = %s", (me, email))
+        db.commit()
+        return fail("该学术邮箱已被其他账号绑定，每个邮箱只能绑定一个账号")
+    db.execute('UPDATE "user" SET academic_email = %s WHERE id = %s', (email, me))
+    db.execute("DELETE FROM email_code WHERE user_id = %s AND email = %s", (me, email))
+    db.commit()
+    # 集星瓶：绑定学术邮箱成就
+    _grant_achievement(db, me, "email", _ACHIEVEMENT_STAR["email"])
+    return ok({"email": email})
+
+
+@app.route("/api/articles/publish", methods=["POST"])
+@login_required
+def api_publish_article():
+    """按 DOI 发表论文：OpenAlex 拉取元数据，作者邮箱必须与绑定学术邮箱一致"""
+    data = request.get_json(silent=True) or request.form
+    doi = (data.get("doi") or "").strip()
+    db = get_db()
+    me = _current_user_id()
+    row = db.execute('SELECT academic_email FROM "user" WHERE id = %s', (me,)).fetchone()
+    my_email = ((row or {}).get("academic_email") or "").strip().lower()
+    if not my_email:
+        return fail("请先在个人主页绑定学术邮箱，才能发表论文")
+    try:
+        meta = fetch_openalex_doi(doi)
+    except RuntimeError as exc:
+        return fail(str(exc))
+    if my_email not in [e.lower() for e in meta["emails"]]:
+        return fail("该 DOI 文献的作者邮箱与你的学术邮箱不匹配，无法发布")
+    if not meta["title"]:
+        return fail("该 DOI 未返回有效文献信息")
+    dup = db.execute(
+        "SELECT id FROM article WHERE user_id = %s AND doi = %s", (me, meta["doi"])).fetchone()
+    if dup:
+        return fail("该论文已在你的 Articles 中")
+    db.execute(
+        "INSERT INTO article (user_id, doi, title, authors, venue, year, create_time) "
+        "VALUES (%s, %s, %s, %s, %s, %s, %s)",
+        (me, meta["doi"], meta["title"], ", ".join(meta["authors"]),
+         meta["venue"], meta["year"], now()))
+    db.commit()
+    # 集星瓶：发布第一篇论文成就
+    c = db.execute("SELECT COUNT(*) AS c FROM article WHERE user_id = %s", (me,)).fetchone()["c"]
+    if c == 1:
+        _grant_achievement(db, me, "first_article", _ACHIEVEMENT_STAR["first_article"])
+    return ok({"doi": meta["doi"]})
+
+
+@app.route("/api/articles/<int:user_id>", methods=["GET"])
+def api_user_articles(user_id):
+    db = get_db()
+    rows = db.execute(
+        "SELECT id, doi, title, authors, venue, year, create_time FROM article "
+        "WHERE user_id = %s ORDER BY create_time DESC, id DESC LIMIT 50", (user_id,)).fetchall()
+    return ok([dict(r) for r in rows])
 
 
 # ---------------------------------------------------------------------------

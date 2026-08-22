@@ -1,0 +1,170 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>集星瓶 · 成长记录站 设计稿</title>
+<style>
+  :root{
+    --bg:#0b0e1a; --card:#141a2e; --card2:#1a2140; --line:#2a3352;
+    --text:#e8ecf7; --muted:#8b93b0; --gold:#fbbf24; --gold2:#f59e0b;
+    --indigo:#818cf8; --ok:#4ade80;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{background:var(--bg);color:var(--text);font-family:'Segoe UI',system-ui,-apple-system,sans-serif;min-height:100vh;padding:34px 20px;display:flex;flex-direction:column;align-items:center;gap:26px}
+  .head{text-align:center}
+  .head h1{font-size:22px;font-weight:800;letter-spacing:.3px}
+  .head p{color:var(--muted);font-size:13px;margin-top:6px}
+  .stage{display:flex;gap:30px;flex-wrap:wrap;justify-content:center;align-items:flex-start;width:100%;max-width:960px}
+  /* ---------- 集星瓶卡片 ---------- */
+  .jar-card{width:340px;background:linear-gradient(160deg,var(--card),var(--card2));border:1px solid var(--line);border-radius:20px;padding:20px;box-shadow:0 18px 50px rgba(2,6,23,.6)}
+  .jar-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:14px}
+  .jar-title{font-size:15px;font-weight:800}
+  .jar-title small{display:block;color:var(--muted);font-weight:500;font-size:11px;margin-top:2px}
+  .jar-count{font-size:26px;font-weight:900;color:var(--gold);font-variant-numeric:tabular-nums}
+  .jar-count small{font-size:11px;color:var(--muted);font-weight:600;margin-right:3px}
+  .jar-wrap{position:relative;height:300px;border-radius:16px;background:radial-gradient(600px 260px at 50% -20%,rgba(129,140,248,.16),transparent 65%),#0c1122;border:1px solid var(--line);overflow:hidden;display:flex;align-items:flex-end;justify-content:center}
+  .jar{position:relative;width:190px;height:230px}
+  /* 瓶身 */
+  .jar-body{position:absolute;left:0;right:0;bottom:0;top:34px;background:linear-gradient(180deg,rgba(148,163,184,.10),rgba(148,163,184,.05));border:2px solid rgba(148,163,184,.38);border-bottom:none;border-radius:14px 14px 26px 26px;overflow:hidden;transition:transform .3s}
+  .jar.celebrate .jar-body{animation:shake .5s ease}
+  @keyframes shake{0%,100%{transform:rotate(0)}25%{transform:rotate(-2.2deg)}75%{transform:rotate(2.2deg)}}
+  /* 瓶颈 + 瓶口 */
+  .jar-neck{position:absolute;left:50%;top:4px;transform:translateX(-50%);width:76px;height:34px;background:linear-gradient(180deg,rgba(148,163,184,.16),rgba(148,163,184,.06));border:2px solid rgba(148,163,184,.38);border-radius:8px 8px 4px 4px}
+  .jar-lip{position:absolute;left:50%;top:-6px;transform:translateX(-50%);width:98px;height:16px;background:rgba(148,163,184,.22);border:2px solid rgba(148,163,184,.45);border-radius:8px}
+  /* 液体光晕 */
+  .jar-glow{position:absolute;left:0;right:0;bottom:0;height:60%;background:radial-gradient(120px 90px at 50% 90%,rgba(251,191,36,.18),transparent 70%)}
+  /* 瓶内星星 */
+  .stars{position:absolute;inset:6px 6px 8px;pointer-events:none}
+  .star{position:absolute;width:16px;height:16px;filter:drop-shadow(0 0 6px rgba(251,191,36,.9));animation:twinkle 2.4s ease-in-out infinite}
+  .star svg{width:100%;height:100%}
+  @keyframes twinkle{0%,100%{opacity:.85;transform:scale(1)}50%{opacity:1;transform:scale(1.14)}}
+  /* 新星飞入动画 */
+  .star.enter{animation:flyin .9s cubic-bezier(.2,.8,.3,1.1) forwards,twinkle 2.4s ease-in-out 0.9s infinite}
+  @keyframes flyin{
+    0%{transform:translate(60px,-140px) scale(.3) rotate(40deg);opacity:0}
+    55%{opacity:1}
+    100%{transform:translate(0,0) scale(1) rotate(0);opacity:.92}
+  }
+  /* 底部弹出提示 */
+  .pop{position:absolute;left:50%;top:-26px;transform:translateX(-50%);background:rgba(20,26,46,.96);border:1px solid var(--gold);color:var(--gold);font-size:11.5px;font-weight:700;padding:3px 10px;border-radius:999px;opacity:0;pointer-events:none;white-space:nowrap}
+  .pop.show{animation:popUp 1.6s ease forwards}
+  @keyframes popUp{0%{opacity:0;transform:translateX(-50%) translateY(6px)}15%{opacity:1;transform:translateX(-50%) translateY(0)}80%{opacity:1}100%{opacity:0;transform:translateX(-50%) translateY(-14px)}}
+  /* ---------- 右侧说明 + 模拟面板 ---------- */
+  .panel{flex:1;min-width:300px;max-width:520px;display:flex;flex-direction:column;gap:14px}
+  .box{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:16px 18px}
+  .box h3{font-size:13px;color:var(--muted);font-weight:700;letter-spacing:.4px;margin-bottom:10px}
+  .rule{display:flex;align-items:center;gap:10px;padding:7px 0;border-bottom:1px dashed rgba(42,51,82,.7)}
+  .rule:last-child{border-bottom:none}
+  .rule .ic{width:26px;height:26px;border-radius:8px;display:grid;place-items:center;font-size:13px;background:rgba(129,140,248,.14);flex:none}
+  .rule .txt{flex:1;font-size:13px}
+  .rule .txt small{display:block;color:var(--muted);font-size:11px;margin-top:1px}
+  .rule .n{font-size:13px;font-weight:800;color:var(--gold);flex:none}
+  .sim{display:flex;flex-wrap:wrap;gap:8px}
+  .sim button{border:1px solid var(--line);background:var(--card2);color:var(--text);font-size:12.5px;padding:8px 14px;border-radius:10px;cursor:pointer;font-family:inherit;transition:.15s}
+  .sim button:hover{border-color:var(--indigo);transform:translateY(-1px)}
+  .sim button.reset{color:#f87171;border-color:rgba(248,113,113,.4)}
+  .hint{font-size:12px;color:var(--muted);line-height:1.7}
+  .hint b{color:var(--text)}
+</style>
+</head>
+<body>
+  <div class="head">
+    <h1>✦ 集星瓶 · 成长记录站（设计稿）</h1>
+    <p>模拟交互：点右侧按钮触发成就，星星会飞进瓶子并弹出提示；悬停星星可看说明</p>
+  </div>
+
+  <div class="stage">
+    <!-- 集星瓶 -->
+    <div class="jar-card">
+      <div class="jar-head">
+        <div class="jar-title">集星瓶<small>成长记录站 · 每一次突破都是一颗星</small></div>
+        <div class="jar-count"><small>已收集</small><span id="count">0</span> ⭐</div>
+      </div>
+      <div class="jar-wrap" id="jarWrap">
+        <div class="jar" id="jar">
+          <div class="jar-lip"></div>
+          <div class="jar-neck"></div>
+          <div class="jar-body">
+            <div class="jar-glow"></div>
+            <div class="stars" id="stars"></div>
+          </div>
+          <div class="pop" id="pop"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 说明 + 模拟 -->
+    <div class="panel">
+      <div class="box">
+        <h3>成长里程碑 · 星星来源</h3>
+        <div class="rule"><span class="ic">🎓</span><span class="txt">注册成为学者<small>开瓶初始星</small></span><span class="n">+1</span></div>
+        <div class="rule"><span class="ic">📝</span><span class="txt">第一次发帖<small>你的第一篇讨论</small></span><span class="n">+1</span></div>
+        <div class="rule"><span class="ic">💬</span><span class="txt">第一次评论<small>开始参与交流</small></span><span class="n">+1</span></div>
+        <div class="rule"><span class="ic">👥</span><span class="txt">第一次被关注<small>被认可的瞬间</small></span><span class="n">+1</span></div>
+        <div class="rule"><span class="ic">✉️</span><span class="txt">绑定学术邮箱<small>认证学者身份</small></span><span class="n">+2</span></div>
+        <div class="rule"><span class="ic">📄</span><span class="txt">发布第一篇论文<small>学术产出里程碑</small></span><span class="n">+3</span></div>
+      </div>
+      <div class="box">
+        <h3>模拟触发（点击看动画）</h3>
+        <div class="sim">
+          <button data-act="首次发帖">📝 首次发帖 +1</button>
+          <button data-act="首次评论">💬 首次评论 +1</button>
+          <button data-act="首次被关注">👥 首次被关注 +1</button>
+          <button data-act="绑定学术邮箱">✉️ 绑定邮箱 +2</button>
+          <button data-act="发布第一篇论文">📄 发布论文 +3</button>
+          <button class="reset" data-act="reset">↺ 清空重来</button>
+        </div>
+      </div>
+      <div class="box hint">
+        <h3>动画方案（实现难度：低）</h3>
+        <b>星星飞入</b>：纯 CSS keyframes —— 新星从瓶口上方飞入、弹跳落地、持续微光闪烁；<br>
+        <b>瓶子晃动</b>：落地瞬间 jar 轻微左右晃动一次（.celebrate 类）；<br>
+        <b>成就提示</b>：瓶口上方弹出 +2 的小气泡，1.5s 后淡出；<br>
+        <b>落地渲染</b>：后端按真实数据（发帖/评论/粉丝/论文/邮箱）计算总星数，前端对比上次记录只补动画，刷新后直接静态展示已有星星。
+      </div>
+    </div>
+  </div>
+
+<script>
+  const POS = [[50,30],[30,55],[68,40],[45,70],[78,62],[25,78],[60,88],[88,82],[40,40],[70,72],[52,58],[16,64]]
+  let total = 0
+  const countEl = document.getElementById('count')
+  const starsEl = document.getElementById('stars')
+  const jar = document.getElementById('jar')
+  const pop = document.getElementById('pop')
+
+  function addStar(n, label){
+    const isNew = !document.querySelector('.star')
+    for(let i=0;i<n;i++){
+      total++
+      const p = POS[total % POS.length]
+      const d = document.createElement('div')
+      d.className = 'star' + (isNew ? '' : ' enter')
+      d.style.left = p[0]+'%'
+      d.style.top = p[1]+'%'
+      d.title = label || '成就'
+      d.innerHTML = '<svg viewBox="0 0 24 24" fill="#fbbf24"><path d="M12 2l2.9 6.3 6.9.8-5.1 4.7 1.4 6.8L12 17.2 5.9 20.6l1.4-6.8L2.2 9.1l6.9-.8z"/></svg>'
+      starsEl.appendChild(d)
+      setTimeout(()=>d.classList.add('enter'), i*220)
+    }
+    countEl.textContent = total
+    jar.classList.remove('celebrate')
+    void jar.offsetWidth
+    jar.classList.add('celebrate')
+    pop.textContent = (n>1?'+'+n+' 颗星 · ':'+1 ') + label
+    pop.classList.remove('show')
+    void pop.offsetWidth
+    pop.classList.add('show')
+  }
+
+  document.querySelectorAll('.sim button').forEach(b=>{
+    b.addEventListener('click',()=>{
+      const act = b.dataset.act
+      if(act==='reset'){ starsEl.innerHTML=''; total=0; countEl.textContent=0; return }
+      addStar(parseInt(b.textContent.match(/\+(\d+)/)[1] || 1), act)
+    })
+  })
+</script>
+</body>
+</html>

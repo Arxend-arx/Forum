@@ -18,6 +18,7 @@ export default function Login() {
     try {
       await login(username, password)
       toast('success', t('welcomeBack'))
+      sessionStorage.setItem('ann_popup_pending', '1') // 登录后首次回到 Landing 时弹公告
       navigate('/')
     } catch (e) {
       toast('error', e.error || t('action.fail'))

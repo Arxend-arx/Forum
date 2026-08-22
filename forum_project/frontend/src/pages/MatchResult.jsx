@@ -3,6 +3,7 @@ import { Link, useParams } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { api } from '../api/client'
 import { Markdown, EmptyState, SkeletonList } from '../components'
+import Icon from '../components/Icon'
 
 export default function MatchResult() {
   const { id } = useParams()
@@ -38,14 +39,14 @@ export default function MatchResult() {
 
       {data.summary && (
         <div className="card" style={{ borderColor: 'rgba(79,107,255,.4)' }}>
-          <div className="card-title" style={{ color: 'var(--primary-2)' }}>✨ {t('summary')}</div>
+          <div className="card-title" style={{ color: 'var(--primary)' }}><Icon name="star" size={16} /> {t('summary')}</div>
           <Markdown text={data.summary} />
         </div>
       )}
 
       {data.errors && data.errors.length > 0 && (
         <div className="card mt-2" style={{ borderColor: 'rgba(255,140,80,.4)' }}>
-          <div className="card-title" style={{ color: '#e08a3c' }}>⚠ {t('retrieveWarn')}</div>
+          <div className="card-title" style={{ color: '#e08a3c' }}><Icon name="alert" size={16} /> {t('retrieveWarn')}</div>
           {data.errors.map((e, i) => (
             <div key={i} className="muted" style={{ fontSize: 12.5, marginTop: 4 }}>{e}</div>
           ))}

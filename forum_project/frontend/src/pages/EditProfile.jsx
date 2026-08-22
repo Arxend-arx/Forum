@@ -4,6 +4,7 @@ import { useTranslation } from 'react-i18next'
 import { api } from '../api/client'
 import { useApp } from '../context/AppContext'
 import { useConfirm, Flag } from '../components'
+import Icon from '../components/Icon'
 import { COUNTRIES, countryName } from '../constants/countries'
 
 export default function EditProfile() {
@@ -95,7 +96,7 @@ export default function EditProfile() {
             <label>{t('avatarLabel')}</label>
             <div className="row" style={{ gap: 8 }}>
               <button className="btn btn-ghost btn-sm" disabled={busy} onClick={() => fileRef.current && fileRef.current.click()}>
-                {busy ? t('uploading') : '📁 ' + t('chooseImage')}
+                {busy ? t('uploading') : <><Icon name="upload" size={14} /> {t('chooseImage')}</>}
               </button>
               {avatar && (
                 <button className="btn btn-ghost btn-sm" onClick={() => setAvatar('')}>{t('removeAvatar')}</button>
@@ -152,7 +153,7 @@ export default function EditProfile() {
       </div>
 
       <div className="card danger-zone">
-        <div className="card-title" style={{ color: 'var(--danger)' }}>⚠ {t('deleteAccount')}</div>
+        <div className="card-title" style={{ color: 'var(--danger)' }}><Icon name="alert" size={16} /> {t('deleteAccount')}</div>
         <p className="muted" style={{ fontSize: 13, margin: '4px 0 12px' }}>{t('deleteAccountDesc')}</p>
         <button className="btn btn-danger btn-sm" onClick={() => setConfirm({ title: t('deleteAccount'), text: t('confirmDeleteAccount'), okText: t('delete'), onOk: doDeleteAccount })}>
           {t('deleteAccount')}

@@ -72,7 +72,7 @@ export default function ChatDetail() {
           </div>
         </div>
         <div className="actions">
-          <Link className="btn btn-ghost btn-sm" to="/chat">← {t('back')}</Link>
+          <Link className="btn btn-ghost btn-sm" to="/social">← {t('back')}</Link>
         </div>
       </div>
 

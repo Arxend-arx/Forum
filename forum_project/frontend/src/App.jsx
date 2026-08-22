@@ -1,10 +1,12 @@
 import React from 'react'
-import { Routes, Route, Navigate } from 'react-router-dom'
+import { Routes, Route, Navigate, useParams } from 'react-router-dom'
 import { Layout } from './components/Layout'
 import { useApp } from './context/AppContext'
 
-import Home from './pages/Home'
-import PostDetail from './pages/PostDetail'
+import Landing from './pages/Landing'
+import Social from './pages/Social'
+import Starlink from './pages/Starlink'
+import TagPosts from './pages/TagPosts'
 import CreatePost from './pages/CreatePost'
 import Search from './pages/Search'
 import Login from './pages/Login'
@@ -15,10 +17,10 @@ import Match from './pages/Match'
 import MatchResult from './pages/MatchResult'
 import MatchHistory from './pages/MatchHistory'
 import LlmSettings from './pages/LlmSettings'
-import Chat from './pages/Chat'
 import ChatDetail from './pages/ChatDetail'
 import Messages from './pages/Messages'
 import Friends from './pages/Friends'
+import FriendsList from './pages/FriendsList'
 import Admin from './pages/Admin'
 import Announcements from './pages/Announcements'
 
@@ -37,16 +39,27 @@ function RequireAdmin({ children }) {
   return children
 }
 
+/* 帖子详情：统一跳转到 Social 页内联展开（保持左栏工具栏不动） */
+function PostRedirect() {
+  const { id } = useParams()
+  return <Navigate to={`/social?post=${id}`} replace />
+}
+
 export default function App() {
   return (
     <Routes>
+      <Route path="/" element={<Navigate to="/landing" replace />} />
       <Route path="/login" element={<Login />} />
       <Route path="/register" element={<Register />} />
+      <Route path="/landing" element={<Landing />} />
+      <Route path="/starlink" element={<Starlink />} />
+      <Route path="/post/:id" element={<PostRedirect />} />
 
       <Route element={<Layout />}>
-        <Route path="/" element={<Home />} />
+        <Route path="/social" element={<Social />} />
+        <Route path="/forum" element={<Navigate to="/social" replace />} />
+        <Route path="/tags/:tag" element={<TagPosts />} />
         <Route path="/announcements" element={<Announcements />} />
-        <Route path="/post/:id" element={<PostDetail />} />
         <Route path="/search" element={<Search />} />
         <Route path="/profile/:id" element={<Profile />} />
 
@@ -56,10 +69,11 @@ export default function App() {
         <Route path="/match/result/:id" element={<RequireAuth><MatchResult /></RequireAuth>} />
         <Route path="/match/history" element={<RequireAuth><MatchHistory /></RequireAuth>} />
         <Route path="/settings/llm" element={<RequireAuth><LlmSettings /></RequireAuth>} />
-        <Route path="/chat" element={<RequireAuth><Chat /></RequireAuth>} />
+        <Route path="/chat" element={<Navigate to="/social" replace />} />
         <Route path="/chat/:userId" element={<RequireAuth><ChatDetail /></RequireAuth>} />
         <Route path="/messages" element={<RequireAuth><Messages /></RequireAuth>} />
         <Route path="/friends/requests" element={<RequireAuth><Friends /></RequireAuth>} />
+        <Route path="/friends/list" element={<RequireAuth><FriendsList /></RequireAuth>} />
         <Route path="/admin" element={<RequireAdmin><Admin /></RequireAdmin>} />
       </Route>
 

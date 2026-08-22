@@ -11,12 +11,16 @@ export function AppProvider({ children }) {
   const [user, setUser] = useState(null)      // null=未登录, {…}=已登录
   const [authReady, setAuthReady] = useState(false)
   const [toasts, setToasts] = useState([])
-  const [theme, setTheme] = useState(localStorage.getItem('acad-theme') || 'dark')
+  /* 默认深色。仅当用户曾**主动切到 light** 时才用 light（用独立 key 标记，避免旧 light 残留污染） */
+  const [theme, setTheme] = useState(
+    localStorage.getItem('acad-theme-set') ? (localStorage.getItem('acad-theme') || 'dark') : 'dark'
+  )
 
   // 主题应用
   useEffect(() => {
     document.documentElement.dataset.theme = theme
     localStorage.setItem('acad-theme', theme)
+    localStorage.setItem('acad-theme-set', '1')   // 标记：用户已主动表态
   }, [theme])
 
   // 启动时恢复登录态

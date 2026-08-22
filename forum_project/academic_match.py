@@ -141,6 +141,54 @@ def search_openalex(query: str, limit: int = 10) -> list:
     return items
 
 
+_EMAIL_RE = re.compile(r"[A-Za-z0-9._%+\-]+@[A-Za-z0-9.\-]+\.[A-Za-z]{2,}")
+
+
+def fetch_openalex_doi(doi: str) -> dict:
+    """
+    按 DOI 拉取 OpenAlex 文献元数据（无 Key 免费源）。
+    返回 { title, authors, venue, year, doi, emails }
+    - authors: 作者显示名列表（可能多人）
+    - emails : 从该文献元数据中提取到的全部邮箱（作者机构字符串等，
+               用于与用户绑定的学术邮箱比对）
+    找不到该 DOI 时抛 RuntimeError。
+    """
+    doi = (doi or "").strip().lower()
+    if not doi.startswith("10."):
+        raise RuntimeError("DOI 格式不正确，应以 10. 开头")
+    url = f"{OPENALEX_API}/doi:{doi}"
+    try:
+        resp = requests.get(url, params={"mailto": "academy@example.com"}, timeout=30)
+        if resp.status_code == 404:
+            raise RuntimeError("未在 OpenAlex 中找到该 DOI 对应的文献")
+        resp.raise_for_status()
+    except requests.exceptions.RequestException as exc:
+        raise RuntimeError(f"OpenAlex 文献获取失败: {exc}") from exc
+
+    w = resp.json()
+    authors = [a.get("author", {}).get("display_name", "")
+               for a in (w.get("authorships") or [])
+               if a.get("author", {}).get("display_name")]
+    src = (w.get("primary_location") or {}).get("source") or {}
+    venue = src.get("display_name") or ""
+    year = w.get("publication_year")
+    # 提取邮箱：作者机构字符串优先，其次全文元数据兜底
+    emails = set()
+    for a in (w.get("authorships") or []):
+        for raw in (a.get("raw_affiliation_strings") or []):
+            emails.update(_EMAIL_RE.findall(raw or ""))
+    if not emails:
+        emails.update(_EMAIL_RE.findall(json.dumps(w, ensure_ascii=False)))
+    return {
+        "title": w.get("display_name") or "",
+        "authors": authors,
+        "venue": venue,
+        "year": str(year) if year is not None else "",
+        "doi": (w.get("doi") or "").replace("https://doi.org/", ""),
+        "emails": sorted(emails),
+    }
+
+
 # ---------------------------------------------------------------------------
 # Espacenet OPS 专利检索（免费注册 key，config.json espacenet 节点配置）
 # ---------------------------------------------------------------------------

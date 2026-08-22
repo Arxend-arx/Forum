@@ -4,6 +4,7 @@ import { useTranslation } from 'react-i18next'
 import katex from 'katex'
 import 'katex/dist/katex.min.css'
 import { flagEmoji } from '../constants/countries'
+import Icon from './Icon'
 
 /* ---------- 头像（有图显图，无图显首字） ---------- */
 export function Avatar({ name, size, className, src }) {
@@ -109,8 +110,8 @@ export function MarkdownEditor({ value, onChange, minHeight, placeholder }) {
         <button type="button" onClick={() => insert('## ', '', 0)} title="Heading">H</button>
         <button type="button" onClick={() => insert('> ', '', 0)} title="Quote">❝</button>
         <button type="button" onClick={() => insert('`', '`', 0)} title="Code">{'<>'}</button>
-        <button type="button" onClick={() => insert('[', '](https://)', 0)} title="Link">🔗</button>
-        <button type="button" onClick={() => insert('![', '](https://)', 0)} title="Image">🖼</button>
+        <button type="button" onClick={() => insert('[', '](https://)', 0)} title="Link"><Icon name="link" size={15} /></button>
+        <button type="button" onClick={() => insert('![', '](https://)', 0)} title="Image"><Icon name="image" size={15} /></button>
         <EmojiPicker onPick={(emo) => insert(emo, '', 0)} />
         <span className="hint" style={{ marginLeft: 'auto' }}>{value.length}</span>
       </div>
@@ -310,7 +311,7 @@ export function PostCard({ post }) {
         </div>
       </div>
       <h3><Link to={`/post/${post.id}`}>{post.title}</Link></h3>
-      <TagChips tags={post.tags} onPick={(tg) => navigate(`/?tag=${encodeURIComponent(tg)}`)} />
+      <TagChips tags={post.tags} onPick={(tg) => navigate(`/tags/${encodeURIComponent(tg)}`)} />
       <p className="excerpt">{post.content}</p>
       <div className="foot">
         <span className="stat">

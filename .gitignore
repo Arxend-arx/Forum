@@ -12,3 +12,13 @@ data/
 # Python 缓存（编译产物，不入库）
 __pycache__/
 *.pyc
+
+# 一次性导出副本（过程产物，不入库）
+forum_export/
+
+# 本地部署脚本（含服务器凭据，不入库）
+deploy_tmp/
+
+# 本地数据库与工具缓存（运行时数据，不入库）
+forum_project/forum.db
+forum_project/.mcp_tools_cache.json

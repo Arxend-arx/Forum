@@ -1,17 +1,23 @@
 import React from 'react'
-import { NavLink, Link, Outlet, useNavigate } from 'react-router-dom'
+import { NavLink, Link, Outlet, useLocation, useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { useApp } from '../context/AppContext'
 import { Avatar } from './index'
+import Icon from './Icon'
+import TopNav from './TopNav'
 
-const NAV = [
-  { key: 'home', to: '/', icon: 'M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z' },
-  { key: 'create', to: '/create', icon: 'M12 20h9M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z', needAuth: true },
-  { key: 'match', to: '/match', icon: 'M4 19.5A2.5 2.5 0 0 1 6.5 17H20M4 19.5A2.5 2.5 0 0 0 6.5 22H20V2H6.5A2.5 2.5 0 0 0 4 4.5v15z', needAuth: true },
-  { key: 'chat', to: '/chat', icon: 'M21 11.5a8.4 8.4 0 0 1-9 8.4 8.6 8.6 0 0 1-3.4-.7L3 21l1.8-5.6A8.4 8.4 0 1 1 21 11.5z', needAuth: true },
-  { key: 'messages', to: '/messages', icon: 'M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9M13.7 21a2 2 0 0 1-3.4 0', needAuth: true },
+/* 顶部主导航（Reddit 风格：Home / Starlink / Polestars） */
+const NAV_TOP = [
+  { key: 'landingHome', to: '/', icon: 'home' },
+  { key: 'socialNav', to: '/social', icon: 'social' },
+  { key: 'starlink', to: '/starlink', icon: 'starlink' },
 ]
-const PROFILE_ICON = 'M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2M12 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8z'
+
+/* 底部"我"组 */
+const NAV_ME = (t, role) => [
+  { key: 'profile', to: '/profile/me', icon: 'profile' },
+  ...(role === 'admin' ? [{ key: 'manage', to: '/admin', icon: 'shield' }] : []),
+]
 
 export function Sidebar() {
   const { t, i18n } = useTranslation()
@@ -26,39 +32,38 @@ export function Sidebar() {
         <span className="logo">A</span>
         <span className="name">{t('brand')}</span>
       </Link>
-      <nav className="nav">
-        {NAV.map(({ key, to, icon, needAuth }) => (
-          <NavLink
-            key={key}
-            to={needAuth && !user ? '/login' : to}
-            end={key === 'home'}
-            className={({ isActive }) => (isActive ? 'active' : '')}
-          >
-            <svg className="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-              <path d={icon} />
-            </svg>
+
+      {/* 主导航（裸列表，无卡片，Reddit 风格） */}
+      <nav className="nav nav-top">
+        {NAV_TOP.map(({ key, to, icon }) => (
+          <NavLink key={key} to={to} end={key === 'landingHome'}
+            className={({ isActive }) => (isActive ? 'active' : '')}>
+            <Icon name={icon} className="ic" />
             <span>{t(key)}</span>
-            {key === 'messages' && user && user.unread_count > 0 && (
-              <span className="badge">{user.unread_count}</span>
-            )}
           </NavLink>
         ))}
-        <NavLink to={profileTo} end className={({ isActive }) => (isActive ? 'active' : '')}>
-          <svg className="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-            <path d={PROFILE_ICON} />
-          </svg>
-          <span>{t('profile')}</span>
-        </NavLink>
-        {user && user.role === 'admin' && (
-          <NavLink to="/admin" className={({ isActive }) => (isActive ? 'active' : '')}>
-            <svg className="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-              <path d="M12 1l8.7 4.3v5.6c0 5.1-3.7 9.9-8.7 11.1-5-1.2-8.7-6-8.7-11.1V5.3z" />
-            </svg>
-            <span>{t('manage')}</span>
-          </NavLink>
-        )}
       </nav>
+
+      {/* 分组：我的（横线分隔 + 小标题） */}
+      <div className="nav-group">
+        <div className="nav-group-title">{isZh ? '我的' : 'Me'}</div>
+        <nav className="nav nav-top">
+          <NavLink to={profileTo} end className={({ isActive }) => (isActive ? 'active' : '')}>
+            <Icon name="profile" className="ic" />
+            <span>{t('profile')}</span>
+          </NavLink>
+          {user && user.role === 'admin' && (
+            <NavLink to="/admin" className={({ isActive }) => (isActive ? 'active' : '')}>
+              <Icon name="shield" className="ic" />
+              <span>{t('manage')}</span>
+            </NavLink>
+          )}
+        </nav>
+      </div>
+
       <div className="spacer" />
+
+      {/* 底部：主题/语言切换 + 用户卡 */}
       <div className="ctrl">
         <button onClick={toggleLang}>{isZh ? 'EN' : '中'}</button>
         <button onClick={toggleTheme}>
@@ -77,12 +82,32 @@ export function Sidebar() {
 }
 
 export function Layout() {
+  const { pathname } = useLocation()
+  /* Social / Starlink 需要三栏 Reddit 布局，跳出 .main 的 900px 限制 */
+  const wide = pathname === '/social' || pathname.startsWith('/starlink')
+  /* Landing / Social / 帖子详情 / 用户主页 / Starlink 星空均独立渲染：
+     Landing 需要整屏背景海洋特效（无侧栏）；其余页面不需要工作栏，只用页内返回按键 */
+  const standalone = pathname === '/' || pathname === '/social' || pathname.startsWith('/post/') || pathname.startsWith('/profile/') || pathname.startsWith('/starlink')
+  if (standalone) {
+    return (
+      <div className="layout standalone">
+        <Outlet />
+      </div>
+    )
+  }
+  /* 私信 / 信件箱 / 全部好友页：保留顶部大页面入口，但不要左侧工具栏 */
+  const noSidebar = pathname === '/chat' || pathname.startsWith('/chat/') ||
+    pathname === '/messages' || pathname.startsWith('/friends/list')
   return (
     <div className="layout">
-      <Sidebar />
-      <main className="main">
-        <Outlet />
-      </main>
+      {/* 顶部大页面入口（所有页面保留：Home / Starlink / Polestars / Profile） */}
+      <TopNav />
+      <div className="layout-body">
+        {!noSidebar && <Sidebar />}
+        <main className={'main' + (wide ? ' full-width' : '')}>
+          <Outlet />
+        </main>
+      </div>
     </div>
   )
 }

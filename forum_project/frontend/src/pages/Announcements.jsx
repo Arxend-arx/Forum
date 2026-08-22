@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { api } from '../api/client'
 import { Avatar, Markdown, EmptyState, SkeletonList } from '../components'
+import Icon from '../components/Icon'
 
 export default function Announcements() {
   const { t } = useTranslation()
@@ -20,7 +21,7 @@ export default function Announcements() {
     <>
       <div className="page-head">
         <div>
-          <h1>📢 {t('announcements')}</h1>
+          <h1><Icon name="bell" size={22} /> {t('announcements')}</h1>
           <div className="sub">{list.length} {t('resultCount')}</div>
         </div>
         <div className="actions">
@@ -37,12 +38,12 @@ export default function Announcements() {
               <div className="meta">
                 <div className="author">
                   {a.publisher_username || t('admin')}
-                  {a.publisher_role === 'admin' && <span className="tag warn" style={{ marginLeft: 8 }}>★ {t('adminBadge')}</span>}
+                  {a.publisher_role === 'admin' && <span className="tag warn" style={{ marginLeft: 8 }}><Icon name="star" size={11} /> {t('adminBadge')}</span>}
                 </div>
                 <div className="time">{a.create_time}</div>
               </div>
             </div>
-            <div className="card-title">📢 {a.title}</div>
+            <div className="card-title"><Icon name="bell" size={16} /> {a.title}</div>
             <Markdown text={a.content} />
           </div>
         ))}

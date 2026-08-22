@@ -1,0 +1,9 @@
+# ============================================================
+# 前端快速单阶段镜像（本地已 npm run build 好 dist，跳过 node 构建）
+# 用法：Copy-Item -Recurse -Force frontend/dist build_tmp/dist
+#       docker build -f docker/frontend/Dockerfile.fast -t forum_project-frontend:latest .
+# ============================================================
+FROM hub.rat.dev/library/nginx:alpine
+COPY docker/frontend/nginx.conf /etc/nginx/conf.d/default.conf
+COPY build_tmp/dist /usr/share/nginx/html
+EXPOSE 80

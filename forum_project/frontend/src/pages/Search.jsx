@@ -4,14 +4,20 @@ import { useTranslation } from 'react-i18next'
 import { api } from '../api/client'
 import { Avatar, EmptyState, TagChips } from '../components'
 
-export default function Search() {
+export default function Search({ q: propQ, onClose, onOpenPost }) {
   const { t } = useTranslation()
   const navigate = useNavigate()
   const [params, setParams] = useSearchParams()
-  const q = params.get('q') || ''
-  const [input, setInput] = useState(q)
-  const [tab, setTab] = useState(0)
+  const isInline = propQ !== undefined        // 内联模式：在 Social 内显示，不跳页
+  const urlQ = params.get('q') || ''
+  const [q, setQ] = useState(isInline ? propQ : urlQ)
+  const [input, setInput] = useState(isInline ? propQ : urlQ)
+  const [tab, setTab] = useState(params.get('type') === 'user' ? 1 : 0)
   const [data, setData] = useState(null)
+
+  useEffect(() => {
+    if (isInline) { setQ(propQ); setInput(propQ) }
+  }, [propQ])
 
   useEffect(() => {
     if (!q) { setData({ posts: [], users: [] }); return }
@@ -20,20 +26,33 @@ export default function Search() {
     return () => { alive = false }
   }, [q])
 
-  const run = () => setParams({ q: input })
+  const run = () => {
+    if (isInline) setQ(input)
+    else setParams({ q: input })
+  }
 
   return (
     <>
-      <div className="page-head">
-        <div className="searchbox grow">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-            <circle cx="11" cy="11" r="7" /><path d="M21 21l-4.3-4.3" />
-          </svg>
-          <input value={input} placeholder={t('searchPh')} onChange={(e) => setInput(e.target.value)}
-            onKeyDown={(e) => e.key === 'Enter' && run()} />
+      {isInline ? (
+        /* 内联模式（Social 顶栏已有关键词输入框）：不再重复显示搜索框，只留返回 + 关键词 */
+        <div className="page-head">
+          {onClose && (
+            <button type="button" className="muted" style={{ fontSize: 13, background: 'none', border: 'none', padding: 0, cursor: 'pointer', marginRight: 10 }} onClick={onClose}>← {t('back')}</button>
+          )}
+          <span className="muted" style={{ fontSize: 13, fontWeight: 600 }}>“{q}”</span>
         </div>
-        <button className="btn btn-primary" onClick={run}>{t('search')}</button>
-      </div>
+      ) : (
+        <div className="page-head">
+          <div className="searchbox grow">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <circle cx="11" cy="11" r="7" /><path d="M21 21l-4.3-4.3" />
+            </svg>
+            <input value={input} placeholder={t('searchPh')} onChange={(e) => setInput(e.target.value)}
+              onKeyDown={(e) => e.key === 'Enter' && run()} />
+          </div>
+          <button className="btn btn-primary" onClick={run}>{t('search')}</button>
+        </div>
+      )}
 
       <div className="tabs">
         <button className={tab === 0 ? 'active' : ''} onClick={() => setTab(0)}>{t('posts')}</button>
@@ -51,8 +70,10 @@ export default function Search() {
                   <div className="author">{p.author} <small>· {p.create_time}</small></div>
                 </div>
               </div>
-              <h3><Link to={`/post/${p.id}`}>{p.title}</Link></h3>
-              <TagChips tags={p.tags} onPick={(tg) => navigate(`/?tag=${encodeURIComponent(tg)}`)} />
+              <h3>{onOpenPost
+                ? <a href="#" style={{ cursor: 'pointer' }} onClick={(e) => { e.preventDefault(); onOpenPost(p.id) }}>{p.title}</a>
+                : <Link to={`/post/${p.id}`}>{p.title}</Link>}</h3>
+              <TagChips tags={p.tags} onPick={(tg) => navigate(`/tags/${encodeURIComponent(tg)}`)} />
               <p className="excerpt">{p.content}</p>
               <div className="foot">
                 <span className="stat">{p.comment_count} {t('comments')}</span>

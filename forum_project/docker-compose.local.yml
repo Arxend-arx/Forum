@@ -1,0 +1,26 @@
+# ============================================================
+# 本地预览部署 override（与主站 Forum_test 并行，不冲突）
+#   - 独立容器名 change-*（避免覆盖正在运行的 academy-*）
+#   - 前端端口 8081（避开主站 8080）
+#   - 独立数据卷（全新数据库，可自行注册测试账号）
+# 用法：docker compose -p change -f docker-compose.yml -f docker-compose.local.yml up -d --build
+# ============================================================
+services:
+  db:
+    container_name: change-db
+    volumes:
+      - change-pgdata:/var/lib/postgresql/data
+
+  backend:
+    container_name: change-backend
+    volumes:
+      - change-uploads:/app/static/uploads
+
+  frontend:
+    container_name: change-frontend
+    ports: !override
+      - "8081:80"
+
+volumes:
+  change-pgdata:
+  change-uploads:

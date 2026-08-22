@@ -1,17 +1,24 @@
-import React, { useState } from 'react'
+import React, { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { api } from '../api/client'
 import { useApp } from '../context/AppContext'
 import { MarkdownEditor } from '../components'
+import Icon from '../components/Icon'
 
-export default function CreatePost() {
+export default function CreatePost({ onClose, onCreated }) {
   const { t } = useTranslation()
   const { toast } = useApp()
   const navigate = useNavigate()
   const [title, setTitle] = useState('')
   const [content, setContent] = useState('')
   const [busy, setBusy] = useState(false)
+  const [category, setCategory] = useState('')
+  const [hotTags, setHotTags] = useState([])
+
+  useEffect(() => {
+    api.get('/tags').then((d) => setHotTags((d || []).slice(0, 6).map((x) => x.name))).catch(() => {})
+  }, [])
 
   const submit = async () => {
     if (!title.trim() || !content.trim()) {
@@ -20,8 +27,9 @@ export default function CreatePost() {
     }
     setBusy(true)
     try {
-      const d = await api.post('/posts', { title, content })
+      const d = await api.post('/posts', { title, content, category })
       toast('success', t('saved'))
+      if (onCreated) { onCreated(d.id); return }   // 内联模式（Social 内）：由父组件收起编辑器并展开新帖
       navigate(`/post/${d.id}`)
     } catch (e) {
       toast('error', e.error || t('action.fail'))
@@ -46,13 +54,27 @@ export default function CreatePost() {
         </div>
 
         <div className="form-group">
+          <label>r/ {t('category')}</label>
+          <div className="row" style={{ gap: 8, flexWrap: 'wrap' }}>
+            <input className="input" style={{ flex: 1, minWidth: 200 }} value={category}
+              onChange={(e) => setCategory(e.target.value)}
+              placeholder={t('categoryPh')} />
+            {hotTags.map((tg) => (
+              <button key={tg} type="button"
+                className={'btn btn-sm ' + (category === tg ? 'btn-primary' : 'btn-ghost')}
+                onClick={() => setCategory(category === tg ? '' : tg)}>r/{tg}</button>
+            ))}
+          </div>
+          <span className="hint mt-1"><Icon name="info" size={14} /> {t('tagHint')}</span>
+        </div>
+
+        <div className="form-group">
           <label>{t('contentPh')}</label>
           <MarkdownEditor value={content} onChange={setContent} placeholder={t('contentPh')} />
-          <span className="hint mt-1">💡 {t('tagHint')}</span>
         </div>
 
         <div className="row" style={{ justifyContent: 'flex-end', gap: 10 }}>
-          <button className="btn btn-ghost" onClick={() => navigate(-1)}>{t('cancel')}</button>
+          <button className="btn btn-ghost" onClick={onClose || (() => navigate(-1))}>{t('cancel')}</button>
           <button className="btn btn-primary" disabled={busy} onClick={submit}>
             {busy ? t('searching') : t('publish')}
           </button>

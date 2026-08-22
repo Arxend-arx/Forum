@@ -11,7 +11,7 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 COPY requirements.txt ./
 RUN pip install --no-cache-dir -i https://mirrors.aliyun.com/pypi/simple/ -r requirements.txt
 
-COPY app.py academic_match.py config.json ./
+COPY app.py academic_match.py starlink.py config.json ./
 
 ENV DB_PATH=/data/forum.db \
     UPLOAD_DIR=/data/uploads \
